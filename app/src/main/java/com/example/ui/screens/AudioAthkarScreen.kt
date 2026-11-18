@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.AudioAthkarRepository
 import com.example.data.AudioZikr
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -26,6 +27,24 @@ fun AudioAthkarScreen(
 ) {
     var currentlyPlayingId by remember { mutableStateOf<Int?>(null) }
     var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+    var currentPosition by remember { mutableIntStateOf(0) }
+    var duration by remember { mutableIntStateOf(100) }
+    var isSeeking by remember { mutableStateOf(false) }
+
+    // Update current position while playing
+    LaunchedEffect(currentlyPlayingId, isSeeking) {
+        while (currentlyPlayingId != null && !isSeeking) {
+            mediaPlayer?.let { player ->
+                try {
+                    currentPosition = player.currentPosition
+                    duration = player.duration.coerceAtLeast(1)
+                } catch (e: Exception) {
+                    // ignore
+                }
+            }
+            delay(500)
+        }
+    }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -42,9 +61,11 @@ fun AudioAthkarScreen(
                 setOnPreparedListener {
                     start()
                     currentlyPlayingId = item.id
+                    duration = this.duration.coerceAtLeast(1)
                 }
                 setOnCompletionListener {
                     currentlyPlayingId = null
+                    currentPosition = 0
                 }
             }
         } catch (e: Exception) {
@@ -57,6 +78,7 @@ fun AudioAthkarScreen(
         mediaPlayer?.release()
         mediaPlayer = null
         currentlyPlayingId = null
+        currentPosition = 0
     }
 
     Scaffold(
@@ -98,7 +120,7 @@ fun AudioAthkarScreen(
                         Icon(Icons.Default.Headphones, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = "استمع للأذكار والتلاوات الصوتية بجودة عالية مع التشغيل التلقائي المستمر.",
+                            text = "استمع للأذكار والتلاوات الصوتية مع شريط تحكم وزر سحب سلس لتقديم وترجيع الصوت.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
@@ -128,46 +150,68 @@ fun AudioAthkarScreen(
                     ),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .padding(16.dp)
-                            .fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .fillMaxWidth()
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = if (isPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
-                                modifier = Modifier.size(48.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                        contentDescription = null,
-                                        tint = if (isPlaying) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = if (isPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                            contentDescription = null,
+                                            tint = if (isPlaying) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column {
+                                    Text(
+                                        text = item.title,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = if (isPlaying) "جاري التشغيل..." else item.duration,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                     )
                                 }
                             }
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column {
-                                Text(
-                                    text = item.title,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = if (isPlaying) "جاري التشغيل..." else item.duration,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                )
-                            }
+                            Icon(
+                                imageVector = if (isPlaying) Icons.Default.VolumeUp else Icons.Default.VolumeMute,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
                         }
-                        Icon(
-                            imageVector = if (isPlaying) Icons.Default.VolumeUp else Icons.Default.VolumeMute,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+
+                        // Audio Timeline Slider when playing
+                        if (isPlaying) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Slider(
+                                value = currentPosition.toFloat(),
+                                onValueChange = { newValue ->
+                                    isSeeking = true
+                                    currentPosition = newValue.toInt()
+                                },
+                                onValueChangeFinished = {
+                                    isSeeking = false
+                                    mediaPlayer?.seekTo(currentPosition)
+                                },
+                                valueRange = 0f..duration.toFloat(),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
                 }
             }

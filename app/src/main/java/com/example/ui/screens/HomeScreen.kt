@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.AzkarCategory
 import com.example.data.AzkarRepository
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,7 +41,18 @@ fun HomeScreen(
     val dailyHadith = "«من صلى علي صلاة صلى الله عليه بها عشرا» رواه مسلم"
     val dailyAyah = "﴿أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ﴾ [الرعد: 28]"
 
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(Unit) {
+        delay(600)
+        snackbarHostState.showSnackbar(
+            message = "هذا التطبيق من برمجة وتطوير المطور محمد الحزمي - جميع الحقوق محفوظة للمطور 2026",
+            duration = SnackbarDuration.Long
+        )
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {

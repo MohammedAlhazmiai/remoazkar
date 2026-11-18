@@ -21,8 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.room.QuranDatabase
 import com.example.data.room.SurahEntity
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,6 +44,23 @@ fun QuranScreen(
     var selectedSurah by remember { mutableStateOf<SurahEntity?>(null) }
     var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
+    var currentPosition by remember { mutableIntStateOf(0) }
+    var duration by remember { mutableIntStateOf(100) }
+    var isSeeking by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isPlaying, isSeeking) {
+        while (isPlaying && !isSeeking) {
+            mediaPlayer?.let { player ->
+                try {
+                    currentPosition = player.currentPosition
+                    duration = player.duration.coerceAtLeast(1)
+                } catch (e: Exception) {
+                    // ignore
+                }
+            }
+            delay(500)
+        }
+    }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -61,9 +77,11 @@ fun QuranScreen(
                 setOnPreparedListener {
                     start()
                     isPlaying = true
+                    duration = this.duration.coerceAtLeast(1)
                 }
                 setOnCompletionListener {
                     isPlaying = false
+                    currentPosition = 0
                 }
             }
         } catch (e: Exception) {
@@ -76,6 +94,7 @@ fun QuranScreen(
         mediaPlayer?.release()
         mediaPlayer = null
         isPlaying = false
+        currentPosition = 0
     }
 
     Scaffold(
@@ -199,39 +218,60 @@ fun QuranScreen(
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .padding(16.dp)
-                            .fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .fillMaxWidth()
                     ) {
-                        Column {
-                            Text(
-                                text = "تلاوة سورة ${selectedSurah!!.name}",
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                            Text(
-                                text = if (isPlaying) "جاري التشغيل..." else "صفحة ${selectedSurah!!.pageNumber}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                            )
-                        }
-                        IconButton(
-                            onClick = {
-                                if (isPlaying) {
-                                    stopAudio()
-                                } else {
-                                    playAudio(selectedSurah!!.audioUrl)
-                                }
-                            }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = if (isPlaying) Icons.Default.PauseCircle else Icons.Default.PlayCircle,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.primary
+                            Column {
+                                Text(
+                                    text = "تلاوة سورة ${selectedSurah!!.name}",
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Text(
+                                    text = if (isPlaying) "جاري التشغيل..." else "صفحة ${selectedSurah!!.pageNumber}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    if (isPlaying) {
+                                        stopAudio()
+                                    } else {
+                                        playAudio(selectedSurah!!.audioUrl)
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = if (isPlaying) Icons.Default.PauseCircle else Icons.Default.PlayCircle,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(48.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+
+                        if (isPlaying) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Slider(
+                                value = currentPosition.toFloat(),
+                                onValueChange = { newValue ->
+                                    isSeeking = true
+                                    currentPosition = newValue.toInt()
+                                },
+                                onValueChangeFinished = {
+                                    isSeeking = false
+                                    mediaPlayer?.seekTo(currentPosition)
+                                },
+                                valueRange = 0f..duration.toFloat(),
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
                     }
