@@ -1,0 +1,6 @@
+{
+  "name": "ريمواذكار",
+  "description": "تطبيق ريمواذكار الشامل للأذكار والأدعية وحصن المسلم مع مسبحة إلكترونية وإشعارات ذكية",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
