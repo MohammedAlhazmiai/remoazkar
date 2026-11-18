@@ -34,7 +34,7 @@ fun QuranScreen(
     var mode by remember { mutableStateOf(0) }
     var query by remember { mutableStateOf("") }
 
-    val surahs = remember {
+    val surahs = remember(QuranRepository.isLoaded) {
         QuranRepository.ensureLoaded(context)
         QuranRepository.surahs.toList()
     }

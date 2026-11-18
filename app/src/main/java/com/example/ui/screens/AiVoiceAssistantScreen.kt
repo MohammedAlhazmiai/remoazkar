@@ -74,7 +74,7 @@ fun AiVoiceAssistantScreen(
         mutableStateOf("أهلًا بك في روبوت ريمواذكار. اضغط على أي نص في التطبيق ليقرأه لك بصوت عربي فصيح وواضح، أو اكتب ما تريد هنا ثم اضغط اقرأ.")
     }
 
-    val featured = remember { HisnRepository.featuredIds().mapNotNull { HisnRepository.chapter(it) } }
+    val featured = remember(HisnRepository.isLoaded) { HisnRepository.featuredIds().mapNotNull { HisnRepository.chapter(it) } }
 
     Scaffold(
         topBar = {

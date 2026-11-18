@@ -34,7 +34,7 @@ fun HisnChapterScreen(
     onBackClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val chapter = remember(chapterId) {
+    val chapter = remember(chapterId, HisnRepository.isLoaded) {
         HisnRepository.ensureLoaded(context)
         HisnRepository.chapter(chapterId)
     }

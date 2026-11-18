@@ -1,6 +1,9 @@
 package com.example.data
 
 import android.content.Context
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import org.json.JSONObject
 
 data class SurahInfo(
@@ -31,6 +34,10 @@ data class Ayah(
 object QuranRepository {
 
     private var loaded = false
+
+    /** حالة قابلة للملاحظة من Compose حتى تُحدَّث الشاشات تلقائيًا بعد اكتمال التحميل. */
+    var isLoaded by mutableStateOf(false)
+        private set
     val surahs = ArrayList<SurahInfo>(114)
     val ayahs = ArrayList<Ayah>(6236)
     private val surahIndex = HashMap<Int, List<Ayah>>()
@@ -77,6 +84,7 @@ object QuranRepository {
         }
         grouped.forEach { (k, v) -> surahIndex[k] = v }
         loaded = true
+        isLoaded = true
     }
 
     fun normalize(input: String): String {

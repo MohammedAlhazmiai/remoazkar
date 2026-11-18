@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.SpiritualRepository
+import com.example.data.TtsManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -88,6 +89,15 @@ fun SpiritualCompanionScreen(
                                     text = recommendation.title,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                            }
+                            Spacer(modifier = Modifier.weight(1f))
+                            val speakText = "${recommendation.mood}. ${recommendation.title}. ${recommendation.description}. ${recommendation.recommendedZikr}"
+                            IconButton(onClick = { TtsManager.toggle(speakText) }) {
+                                Icon(
+                                    imageVector = if (TtsManager.isSpeaking) Icons.Default.Stop else Icons.Default.VolumeUp,
+                                    contentDescription = "قراءة الاقتراح",
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }

@@ -43,7 +43,7 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val hijri = remember { HijriCalendar.today() }
-    val featured = remember {
+    val featured = remember(HisnRepository.isLoaded) {
         HisnRepository.ensureLoaded(context)
         HisnRepository.featuredIds().mapNotNull { HisnRepository.chapter(it) }
     }

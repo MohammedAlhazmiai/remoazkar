@@ -38,14 +38,14 @@ fun SearchScreen(
     var query by remember { mutableStateOf("") }
     var mode by remember { mutableStateOf(0) } // 0: الكل، 1: القرآن، 2: الأذكار
 
-    val quranResults: List<Ayah> = remember(query, mode) {
+    val quranResults: List<Ayah> = remember(query, mode, QuranRepository.isLoaded) {
         if (query.trim().length < 2 || mode == 2) emptyList()
         else {
             QuranRepository.ensureLoaded(context)
             QuranRepository.search(context, query, 150)
         }
     }
-    val hisnResults: List<Pair<HisnChapter, HisnItem>> = remember(query, mode) {
+    val hisnResults: List<Pair<HisnChapter, HisnItem>> = remember(query, mode, HisnRepository.isLoaded) {
         if (query.trim().length < 2 || mode == 1) emptyList()
         else {
             HisnRepository.ensureLoaded(context)

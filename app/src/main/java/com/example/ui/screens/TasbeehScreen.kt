@@ -25,6 +25,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.PreferencesManager
+import com.example.data.TtsManager
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,6 +41,18 @@ fun TasbeehScreen(
     var selectedZikrIndex by remember { mutableIntStateOf(0) }
     var targetCount by remember { mutableIntStateOf(33) }
     var vibrationEnabled by remember { mutableStateOf(true) }
+
+    // حفظ المجموع الكلي واستعادته بعد إغلاق التطبيق
+    val prefs = remember { PreferencesManager(context) }
+    val scope = rememberCoroutineScope()
+    val savedTotal by prefs.tasbeehTotalFlow.collectAsState(initial = -1)
+    var restored by remember { mutableStateOf(false) }
+    LaunchedEffect(savedTotal) {
+        if (!restored && savedTotal >= 0) {
+            totalCount = savedTotal
+            restored = true
+        }
+    }
 
     val zikrOptions = listOf(
         "سُبْحَانَ اللَّهِ",
@@ -146,13 +161,25 @@ fun TasbeehScreen(
                         .fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
-                        text = currentZikr,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = currentZikr,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { TtsManager.toggle(currentZikr) }
+                        )
+                        IconButton(onClick = { TtsManager.toggle(currentZikr) }) {
+                            Icon(
+                                imageVector = if (TtsManager.isSpeaking) Icons.Default.Stop else Icons.Default.VolumeUp,
+                                contentDescription = "قراءة الذكر",
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
                     Spacer(modifier = Modifier.height(10.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -199,6 +226,7 @@ fun TasbeehScreen(
                             triggerVibration()
                             count++
                             totalCount++
+                            scope.launch { prefs.saveTasbeehTotal(totalCount) }
                             if (count >= targetCount) {
                                 cyclesCompleted++
                                 count = 0

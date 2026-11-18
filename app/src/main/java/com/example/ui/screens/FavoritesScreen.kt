@@ -36,7 +36,7 @@ fun FavoritesScreen(
 ) {
     val context = LocalContext.current
 
-    val entries = remember(favorites) {
+    val entries = remember(favorites, QuranRepository.isLoaded, HisnRepository.isLoaded) {
         QuranRepository.ensureLoaded(context)
         HisnRepository.ensureLoaded(context)
         val out = ArrayList<FavEntry>()

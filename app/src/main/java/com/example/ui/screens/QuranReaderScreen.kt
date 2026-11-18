@@ -37,12 +37,12 @@ fun QuranReaderScreen(
     onBackClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val ayahs = remember(surahNumber, pageNumber) {
+    val ayahs = remember(surahNumber, pageNumber, QuranRepository.isLoaded) {
         QuranRepository.ensureLoaded(context)
         if (surahNumber > 0) QuranRepository.ayahsOf(surahNumber)
         else QuranRepository.byPage(pageNumber)
     }
-    val surah = remember(surahNumber) {
+    val surah = remember(surahNumber, QuranRepository.isLoaded) {
         if (surahNumber > 0) QuranRepository.surah(surahNumber) else null
     }
 

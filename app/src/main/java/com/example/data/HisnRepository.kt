@@ -1,6 +1,9 @@
 package com.example.data
 
 import android.content.Context
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import org.json.JSONObject
 
 data class HisnItem(
@@ -25,6 +28,10 @@ data class HisnChapter(
 object HisnRepository {
 
     private var loaded = false
+
+    /** حالة قابلة للملاحظة من Compose حتى تُحدَّث الشاشات تلقائيًا بعد اكتمال التحميل. */
+    var isLoaded by mutableStateOf(false)
+        private set
     val chapters = ArrayList<HisnChapter>(140)
     private val index = HashMap<Int, HisnChapter>()
 
@@ -63,6 +70,7 @@ object HisnRepository {
             index[chapter.id] = chapter
         }
         loaded = true
+        isLoaded = true
     }
 
     fun chapter(id: Int): HisnChapter? = index[id]

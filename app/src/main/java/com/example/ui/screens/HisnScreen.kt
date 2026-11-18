@@ -28,7 +28,7 @@ fun HisnScreen(
     onBackClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val chapters = remember {
+    val chapters = remember(HisnRepository.isLoaded) {
         HisnRepository.ensureLoaded(context)
         HisnRepository.chapters.toList()
     }
