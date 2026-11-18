@@ -30,6 +30,9 @@ class MainActivity : ComponentActivity() {
             val favorites by preferencesManager.favoritesFlow.collectAsState(initial = emptySet())
             val autoReminders by preferencesManager.autoRemindersFlow.collectAsState(initial = true)
             val reminderInterval by preferencesManager.reminderIntervalFlow.collectAsState(initial = 60)
+            val speechRate by preferencesManager.speechRateFlow.collectAsState(initial = 1.0f)
+            val speechPitch by preferencesManager.speechPitchFlow.collectAsState(initial = 1.0f)
+            val notificationSound by preferencesManager.notificationSoundFlow.collectAsState(initial = true)
 
             val navController = rememberNavController()
 
@@ -67,6 +70,9 @@ class MainActivity : ComponentActivity() {
                             onSpiritualCompanionClick = {
                                 navController.navigate("spiritual_companion")
                             },
+                            onAdvancedSettingsClick = {
+                                navController.navigate("advanced_settings")
+                            },
                             onSearchClick = {
                                 navController.navigate("search")
                             },
@@ -92,6 +98,35 @@ class MainActivity : ComponentActivity() {
                     }
                     composable("spiritual_companion") {
                         SpiritualCompanionScreen(
+                            onBackClick = { navController.popBackStack() }
+                        )
+                    }
+                    composable("advanced_settings") {
+                        AdvancedSettingsScreen(
+                            darkMode = darkMode,
+                            onToggleDarkMode = { enabled ->
+                                lifecycleScope.launch {
+                                    preferencesManager.setDarkMode(enabled)
+                                }
+                            },
+                            speechRate = speechRate,
+                            onSpeechRateChange = { rate ->
+                                lifecycleScope.launch {
+                                    preferencesManager.setSpeechRate(rate)
+                                }
+                            },
+                            speechPitch = speechPitch,
+                            onSpeechPitchChange = { pitch ->
+                                lifecycleScope.launch {
+                                    preferencesManager.setSpeechPitch(pitch)
+                                }
+                            },
+                            notificationSound = notificationSound,
+                            onToggleNotificationSound = { sound ->
+                                lifecycleScope.launch {
+                                    preferencesManager.setNotificationSound(sound)
+                                }
+                            },
                             onBackClick = { navController.popBackStack() }
                         )
                     }

@@ -33,6 +33,7 @@ fun HomeScreen(
     onAudioAthkarClick: () -> Unit,
     onAiRobotClick: () -> Unit,
     onSpiritualCompanionClick: () -> Unit,
+    onAdvancedSettingsClick: () -> Unit,
     onSearchClick: () -> Unit,
     onFavoritesClick: () -> Unit
 ) {
@@ -59,6 +60,9 @@ fun HomeScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onAdvancedSettingsClick, modifier = Modifier.testTag("settings_button")) {
+                        Icon(Icons.Default.Settings, contentDescription = "الإعدادات")
+                    }
                     IconButton(onClick = onFavoritesClick, modifier = Modifier.testTag("favorites_button")) {
                         Icon(Icons.Default.Favorite, contentDescription = "المفضلة", tint = MaterialTheme.colorScheme.secondary)
                     }

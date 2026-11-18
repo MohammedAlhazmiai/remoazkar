@@ -2,11 +2,7 @@ package com.example.data
 
 import android.content.Context
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.intPreferencesKey
-import androidx.datastore.preferences.core.stringSetPreferencesKey
+import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -20,6 +16,10 @@ class PreferencesManager(private val context: Context) {
         val AUTO_REMINDERS_KEY = booleanPreferencesKey("auto_reminders")
         val REMINDER_INTERVAL_KEY = intPreferencesKey("reminder_interval")
         val TASBEEH_TOTAL_KEY = intPreferencesKey("tasbeeh_total")
+        val SPEECH_RATE_KEY = floatPreferencesKey("speech_rate")
+        val SPEECH_PITCH_KEY = floatPreferencesKey("speech_pitch")
+        val NOTIFICATION_SOUND_KEY = booleanPreferencesKey("notification_sound")
+        val CUSTOM_TIME_KEY = stringSetPreferencesKey("custom_times")
     }
 
     val darkModeFlow: Flow<Boolean> = context.dataStore.data
@@ -32,10 +32,19 @@ class PreferencesManager(private val context: Context) {
         .map { preferences -> preferences[AUTO_REMINDERS_KEY] ?: true }
 
     val reminderIntervalFlow: Flow<Int> = context.dataStore.data
-        .map { preferences -> preferences[REMINDER_INTERVAL_KEY] ?: 60 } // minutes
+        .map { preferences -> preferences[REMINDER_INTERVAL_KEY] ?: 60 }
 
     val tasbeehTotalFlow: Flow<Int> = context.dataStore.data
         .map { preferences -> preferences[TASBEEH_TOTAL_KEY] ?: 0 }
+
+    val speechRateFlow: Flow<Float> = context.dataStore.data
+        .map { preferences -> preferences[SPEECH_RATE_KEY] ?: 1.0f }
+
+    val speechPitchFlow: Flow<Float> = context.dataStore.data
+        .map { preferences -> preferences[SPEECH_PITCH_KEY] ?: 1.0f }
+
+    val notificationSoundFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences -> preferences[NOTIFICATION_SOUND_KEY] ?: true }
 
     suspend fun setDarkMode(enabled: Boolean) {
         context.dataStore.edit { preferences ->
@@ -69,6 +78,24 @@ class PreferencesManager(private val context: Context) {
     suspend fun saveTasbeehTotal(total: Int) {
         context.dataStore.edit { preferences ->
             preferences[TASBEEH_TOTAL_KEY] = total
+        }
+    }
+
+    suspend fun setSpeechRate(rate: Float) {
+        context.dataStore.edit { preferences ->
+            preferences[SPEECH_RATE_KEY] = rate
+        }
+    }
+
+    suspend fun setSpeechPitch(pitch: Float) {
+        context.dataStore.edit { preferences ->
+            preferences[SPEECH_PITCH_KEY] = pitch
+        }
+    }
+
+    suspend fun setNotificationSound(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[NOTIFICATION_SOUND_KEY] = enabled
         }
     }
 }
