@@ -97,6 +97,12 @@ fun HisnChapterScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            item {
+                com.example.ui.components.ReadingFontSizeRow(
+                    selectedIndex = localFontIndex,
+                    onSelect = { localFontIndex = it }
+                )
+            }
             itemsIndexed(chapter.items) { index, item ->
                 val favKey = FavKeys.hisn(chapter.id, index)
                 val isFav = favorites.contains(favKey)

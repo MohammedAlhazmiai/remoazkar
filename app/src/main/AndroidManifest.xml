@@ -61,6 +61,12 @@
             android:enabled="true"
             android:exported="false" />
 
+        <!-- مستقبل منبّه وقت الأذكار اليومي (إشعارات صوتية تلقائية) -->
+        <receiver
+            android:name=".receiver.AzkarAlarmReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
     </application>
 
 </manifest>

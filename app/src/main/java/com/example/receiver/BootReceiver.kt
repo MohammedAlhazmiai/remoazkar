@@ -3,6 +3,7 @@ package com.example.receiver
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.example.data.AthkarReminderScheduler
 import com.example.data.NotificationHelper
 import com.example.data.ReminderScheduler
 
@@ -19,6 +20,7 @@ class BootReceiver : BroadcastReceiver() {
         ) {
             NotificationHelper.createChannels(context)
             ReminderScheduler.scheduleAll(context)
+            AthkarReminderScheduler.syncFromMirror(context)
         }
     }
 }

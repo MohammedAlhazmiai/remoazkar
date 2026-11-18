@@ -1,7 +1,10 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -20,11 +23,36 @@ import com.example.R
 import com.example.ui.theme.BackgroundDark
 import com.example.ui.theme.EmeraldPrimary
 import com.example.ui.theme.GoldAccent
+import kotlinx.coroutines.delay
+
+private const val SPLASH_SECONDS = 5
 
 @Composable
 fun SplashScreen(
     onEnterClick: () -> Unit
 ) {
+    var remaining by remember { mutableIntStateOf(SPLASH_SECONDS) }
+    var finished by remember { mutableStateOf(false) }
+
+    // عدّاد تنازلي رقمي: عند الوصول إلى صفر ينتقل تلقائيًا للشاشة الرئيسية
+    LaunchedEffect(Unit) {
+        for (i in SPLASH_SECONDS downTo 1) {
+            remaining = i
+            delay(1000)
+        }
+        remaining = 0
+        if (!finished) {
+            finished = true
+            onEnterClick()
+        }
+    }
+
+    val progress by animateFloatAsState(
+        targetValue = (SPLASH_SECONDS - remaining).toFloat() / SPLASH_SECONDS,
+        animationSpec = tween(durationMillis = 900),
+        label = "splash_progress"
+    )
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -36,47 +64,53 @@ fun SplashScreen(
                         BackgroundDark
                     )
                 )
-            ),
-        contentAlignment = Alignment.Center
+            )
+            .clickable {
+                if (!finished) {
+                    finished = true
+                    onEnterClick()
+                }
+            }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(24.dp),
+                .align(Alignment.Center)
+                .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Attached Logo Image displayed professionally (not oversized)
+            // الصورة المرفقة بحجمها الطبيعي (نسبة الأبعاد الأصلية) دون تكبير
             Card(
                 modifier = Modifier
-                    .size(280.dp)
-                    .padding(8.dp),
+                    .fillMaxWidth()
+                    .aspectRatio(1659f / 948f),
                 shape = RoundedCornerShape(24.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 10.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.splash_logo),
+                    painter = painterResource(id = R.drawable.splash_entry),
                     contentDescription = "شعار ريمواذكار",
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(12.dp)
-                        .clip(RoundedCornerShape(16.dp)),
+                        .padding(6.dp)
+                        .clip(RoundedCornerShape(18.dp)),
                     contentScale = ContentScale.Fit
                 )
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             Text(
                 text = "ريمواذكار",
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
                 color = GoldAccent,
-                fontSize = 32.sp
+                fontSize = 30.sp
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             Text(
                 text = "التطبيق الشامل للأذكار والأدعية وحصن المسلم",
@@ -84,24 +118,38 @@ fun SplashScreen(
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f)
             )
+        }
 
-            Spacer(modifier = Modifier.height(48.dp))
-
-            Button(
-                onClick = onEnterClick,
-                colors = ButtonDefaults.buttonColors(containerColor = GoldAccent),
-                shape = RoundedCornerShape(16.dp),
+        // شريط التقدم الرقمي أسفل شاشة الدخول
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(horizontal = 32.dp, vertical = 40.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = if (remaining > 0) "جارٍ الدخول… $remaining" else "مرحبًا بك",
+                color = GoldAccent,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            LinearProgressIndicator(
+                progress = { progress },
                 modifier = Modifier
-                    .fillMaxWidth(0.7f)
-                    .height(54.dp)
-            ) {
-                Text(
-                    text = "دخول التطبيق",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = BackgroundDark
-                )
-            }
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(8.dp)),
+                color = GoldAccent,
+                trackColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.2f)
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = "اضغط في أي مكان للدخول مباشرة",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+            )
         }
     }
 }

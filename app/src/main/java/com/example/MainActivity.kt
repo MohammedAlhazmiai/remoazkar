@@ -27,12 +27,14 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.data.HisnRepository
+import com.example.data.AthkarReminderScheduler
 import com.example.data.NotificationHelper
 import com.example.data.PreferencesManager
 import com.example.data.QuranRepository
 import com.example.data.ReminderScheduler
 import com.example.data.TtsManager
 import com.example.ui.components.TtsMiniBar
+import com.example.ui.screens.AdiyaScreen
 import com.example.ui.screens.AdvancedSettingsScreen
 import com.example.ui.screens.AiVoiceAssistantScreen
 import com.example.ui.screens.CustomAzkarScreen
@@ -95,6 +97,20 @@ class MainActivity : ComponentActivity() {
             val speechPitch by preferencesManager.speechPitchFlow.collectAsState(initial = 1.0f)
             val notificationSound by preferencesManager.notificationSoundFlow.collectAsState(initial = true)
             val fontSizeIndex by preferencesManager.fontSizeFlow.collectAsState(initial = 1)
+            val autoReminders by preferencesManager.autoRemindersFlow.collectAsState(initial = true)
+            val reminderInterval by preferencesManager.reminderIntervalFlow.collectAsState(initial = 60)
+            val azkarTime by preferencesManager.azkarTimeFlow.collectAsState(initial = 6 to 30)
+
+            // مزامنة إشعارات الأذكار التلقائية (WorkManager + منبّه يومي بوقت يدوي)
+            LaunchedEffect(autoReminders, reminderInterval, azkarTime) {
+                AthkarReminderScheduler.sync(
+                    this@MainActivity,
+                    autoReminders,
+                    reminderInterval,
+                    azkarTime.first,
+                    azkarTime.second
+                )
+            }
 
             // مزامنة إعدادات الصوت مع محرّك القراءة
             LaunchedEffect(speechRate, speechPitch) {
@@ -168,6 +184,7 @@ private fun AppRoot(
                     onSpiritualCompanionClick = { navController.navigate("spiritual_companion") },
                     onWirdClick = { navController.navigate("wird") },
                     onRuqyahClick = { navController.navigate("ruqyah") },
+                    onAdiyaClick = { navController.navigate("adiya") },
                     onAdvancedSettingsClick = { navController.navigate("advanced_settings") },
                     onSearchClick = { navController.navigate("search") },
                     onFavoritesClick = { navController.navigate("favorites") },
@@ -250,6 +267,13 @@ private fun AppRoot(
 
             composable("ruqyah") {
                 RuqyahScreen(
+                    fontSizeIndex = fontSizeIndex,
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
+
+            composable("adiya") {
+                AdiyaScreen(
                     fontSizeIndex = fontSizeIndex,
                     onBackClick = { navController.popBackStack() }
                 )

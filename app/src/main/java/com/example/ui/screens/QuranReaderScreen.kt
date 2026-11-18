@@ -46,7 +46,8 @@ fun QuranReaderScreen(
         if (surahNumber > 0) QuranRepository.surah(surahNumber) else null
     }
 
-    val textSize = when (fontSizeIndex) {
+    var localFontIndex by remember { mutableIntStateOf(fontSizeIndex) }
+    val textSize = when (localFontIndex) {
         0 -> 18.sp
         2 -> 28.sp
         else -> 23.sp
