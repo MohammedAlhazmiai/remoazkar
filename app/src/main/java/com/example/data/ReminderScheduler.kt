@@ -35,8 +35,8 @@ object ReminderScheduler {
     private const val PREFS = "rim_reminders_store"
     private const val KEY = "reminders_json"
 
-    private const val REQ_KAHF = 9001
-    private const val REQ_MULK = 9002
+    const val REQ_KAHF = 9001
+    const val REQ_MULK = 9002
 
     fun load(context: Context): List<Reminder> {
         val sp = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -161,11 +161,19 @@ object ReminderScheduler {
         val kahfTime = nextWeekly(Calendar.FRIDAY, 9, 0)
         val mulkTime = nextDaily(21, 30)
 
+        // نستخدم منبّهًا دقيقًا لمرة واحدة ثم يُعيد المستقبِل جدولته، لأن المنبّهات المتكرّرة
+        // لا تُطلَق بدقة داخل وضع Doze على الإصدارات الحديثة.
         try {
-            am.setInexactRepeating(AlarmManager.RTC_WAKEUP, kahfTime, AlarmManager.INTERVAL_DAY * 7, kahfPi)
-            am.setInexactRepeating(AlarmManager.RTC_WAKEUP, mulkTime, AlarmManager.INTERVAL_DAY, mulkPi)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !am.canScheduleExactAlarms()) {
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, kahfTime, kahfPi)
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, mulkTime, mulkPi)
+            } else {
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, kahfTime, kahfPi)
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, mulkTime, mulkPi)
+            }
         } catch (_: SecurityException) {
-            // تجاهل
+            am.set(AlarmManager.RTC_WAKEUP, kahfTime, kahfPi)
+            am.set(AlarmManager.RTC_WAKEUP, mulkTime, mulkPi)
         }
     }
 

@@ -20,6 +20,24 @@ class PreferencesManager(private val context: Context) {
         val SPEECH_PITCH_KEY = floatPreferencesKey("speech_pitch")
         val NOTIFICATION_SOUND_KEY = booleanPreferencesKey("notification_sound")
         val FONT_SIZE_KEY = intPreferencesKey("font_size_index")
+
+        /** ملف SharedPreferences مرآة للقراءة المتزامنة من مستقبِل الإشعارات. */
+        private const val MIRROR_FILE = "rim_mirror"
+        private const val MIRROR_NOTIFICATION_SOUND = "notification_sound"
+
+        /** يُقرأ بشكل متزامن داخل BroadcastReceiver (لا يمكن قراءة DataStore هناك). */
+        fun isNotificationSoundEnabled(context: Context): Boolean =
+            context.applicationContext
+                .getSharedPreferences(MIRROR_FILE, Context.MODE_PRIVATE)
+                .getBoolean(MIRROR_NOTIFICATION_SOUND, true)
+
+        fun mirrorNotificationSound(context: Context, enabled: Boolean) {
+            context.applicationContext
+                .getSharedPreferences(MIRROR_FILE, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(MIRROR_NOTIFICATION_SOUND, enabled)
+                .apply()
+        }
     }
 
     val darkModeFlow: Flow<Boolean> = context.dataStore.data
@@ -97,6 +115,7 @@ class PreferencesManager(private val context: Context) {
     }
 
     suspend fun setNotificationSound(enabled: Boolean) {
+        mirrorNotificationSound(context, enabled)
         context.dataStore.edit { preferences ->
             preferences[NOTIFICATION_SOUND_KEY] = enabled
         }

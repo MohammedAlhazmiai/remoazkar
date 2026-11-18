@@ -44,6 +44,7 @@ import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.QuranReaderScreen
 import com.example.ui.screens.QuranScreen
 import com.example.ui.screens.RemindersScreen
+import com.example.ui.screens.RuqyahScreen
 import com.example.ui.screens.SearchScreen
 import com.example.ui.screens.SpiritualCompanionScreen
 import com.example.ui.screens.SplashScreen
@@ -98,6 +99,11 @@ class MainActivity : ComponentActivity() {
             // مزامنة إعدادات الصوت مع محرّك القراءة
             LaunchedEffect(speechRate, speechPitch) {
                 TtsManager.setParams(speechRate, speechPitch)
+            }
+
+            // مزامنة إعداد صوت الإشعارات مع المرآة المتزامنة التي يقرأها مستقبِل الإشعارات
+            LaunchedEffect(notificationSound) {
+                PreferencesManager.mirrorNotificationSound(this@MainActivity, notificationSound)
             }
 
             MyApplicationTheme(darkTheme = darkMode) {
@@ -161,6 +167,7 @@ private fun AppRoot(
                     onAiRobotClick = { navController.navigate("ai_robot") },
                     onSpiritualCompanionClick = { navController.navigate("spiritual_companion") },
                     onWirdClick = { navController.navigate("wird") },
+                    onRuqyahClick = { navController.navigate("ruqyah") },
                     onAdvancedSettingsClick = { navController.navigate("advanced_settings") },
                     onSearchClick = { navController.navigate("search") },
                     onFavoritesClick = { navController.navigate("favorites") },
@@ -239,6 +246,13 @@ private fun AppRoot(
 
             composable("wird") {
                 WirdScreen(onBackClick = { navController.popBackStack() })
+            }
+
+            composable("ruqyah") {
+                RuqyahScreen(
+                    fontSizeIndex = fontSizeIndex,
+                    onBackClick = { navController.popBackStack() }
+                )
             }
 
             composable("spiritual_companion") {

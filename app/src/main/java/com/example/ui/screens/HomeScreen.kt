@@ -36,6 +36,7 @@ fun HomeScreen(
     onAiRobotClick: () -> Unit,
     onSpiritualCompanionClick: () -> Unit,
     onWirdClick: () -> Unit,
+    onRuqyahClick: () -> Unit,
     onAdvancedSettingsClick: () -> Unit,
     onSearchClick: () -> Unit,
     onFavoritesClick: () -> Unit,
@@ -133,6 +134,10 @@ fun HomeScreen(
                         FeatureCard(
                             "خطة الورد اليومي", "تابع تقدّمك وسلسلتك", Icons.Default.CheckCircle,
                             Modifier.weight(1f), onWirdClick
+                        )
+                        FeatureCard(
+                            "الرقية الشرعية", "30 نصًّا ثابتًا", Icons.Default.HealthAndSafety,
+                            Modifier.weight(1f), onRuqyahClick
                         )
                     }
                 }

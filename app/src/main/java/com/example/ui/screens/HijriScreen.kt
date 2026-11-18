@@ -7,6 +7,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.HijriCalendar
+import com.example.data.TtsManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,6 +33,22 @@ fun HijriScreen(onBackClick: () -> Unit) {
                     IconButton(onClick = onBackClick) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع")
                     }
+                },
+                actions = {
+                    val allText = buildString {
+                        append("اليوم الهجري الحالي: ${today.formatted}. ")
+                        append("المناسبات الإسلامية القادمة: ")
+                        occasions.forEach {
+                            append("${it.title}، ${it.description}، ")
+                            append(if (it.daysUntil == 0) "اليوم. " else "بعد ${it.daysUntil} يوم. ")
+                        }
+                    }
+                    IconButton(onClick = { TtsManager.toggle(allText) }) {
+                        Icon(
+                            if (TtsManager.isSpeaking) Icons.Default.Stop else Icons.Default.VolumeUp,
+                            contentDescription = "قراءة الصفحة بالروبوت"
+                        )
+                    }
                 }
             )
         }
@@ -38,7 +57,7 @@ fun HijriScreen(onBackClick: () -> Unit) {
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
@@ -70,6 +89,19 @@ fun HijriScreen(onBackClick: () -> Unit) {
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
                         )
+                        Spacer(Modifier.height(10.dp))
+                        FilledTonalIconButton(
+                            onClick = {
+                                TtsManager.toggle(
+                                    "اليوم الهجري الحالي: ${today.formatted}"
+                                )
+                            }
+                        ) {
+                            Icon(
+                                if (TtsManager.isSpeaking) Icons.Default.Stop else Icons.Default.VolumeUp,
+                                contentDescription = "اسمع التاريخ"
+                            )
+                        }
                     }
                 }
             }
@@ -84,6 +116,11 @@ fun HijriScreen(onBackClick: () -> Unit) {
             }
 
             items(occasions) { occasion ->
+                val speakText = buildString {
+                    append("${occasion.title}. ")
+                    append("${occasion.description}. ")
+                    append(if (occasion.daysUntil == 0) "هي اليوم." else "بعد ${occasion.daysUntil} يوم.")
+                }
                 Card(shape = RoundedCornerShape(16.dp)) {
                     Row(
                         modifier = Modifier.padding(14.dp),
@@ -98,7 +135,14 @@ fun HijriScreen(onBackClick: () -> Unit) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        Spacer(Modifier.width(10.dp))
+                        Spacer(Modifier.width(6.dp))
+                        IconButton(onClick = { TtsManager.toggle(speakText) }) {
+                            Icon(
+                                if (TtsManager.isSpeaking) Icons.Default.Stop else Icons.Default.VolumeUp,
+                                contentDescription = "اسمع المناسبة",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                         Surface(
                             shape = RoundedCornerShape(10.dp),
                             color = MaterialTheme.colorScheme.secondaryContainer

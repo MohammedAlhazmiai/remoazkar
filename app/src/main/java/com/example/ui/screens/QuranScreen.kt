@@ -11,6 +11,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,6 +23,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.QuranRepository
+import com.example.data.TtsManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -138,6 +141,22 @@ fun QuranScreen(
                                             text = "${surah.revelationType} • ${surah.ayahCount} آية • صفحة ${surah.pageStart}",
                                             fontSize = 12.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            TtsManager.toggle(
+                                                "سورة ${surah.name}، ${surah.revelationType}، " +
+                                                    "عدد آياتها ${surah.ayahCount} آية، " +
+                                                    "تبدأ في صفحة ${surah.pageStart} من المصحف."
+                                            )
+                                        }
+                                    ) {
+                                        Icon(
+                                            if (TtsManager.isSpeaking) Icons.Default.Stop
+                                            else Icons.Default.VolumeUp,
+                                            contentDescription = "اسمع بيانات السورة",
+                                            tint = MaterialTheme.colorScheme.primary
                                         )
                                     }
                                 }

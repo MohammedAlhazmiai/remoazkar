@@ -15,10 +15,14 @@ class ReminderReceiver : BroadcastReceiver() {
 
         NotificationHelper.show(context, id, title, body)
 
-        // إعادة الجدولة للتذكيرات اليومية/الأسبوعية
-        val reminder = ReminderScheduler.load(context).firstOrNull { it.id == id }
-        if (reminder != null && reminder.enabled) {
-            ReminderScheduler.schedule(context, reminder)
+        // إعادة الجدولة: تذكيرات المستخدم تُعاد لليوم التالي، ومنبّهات الكهف والملك تُعاد أسبوعيًا/يوميًا
+        if (id == ReminderScheduler.REQ_KAHF || id == ReminderScheduler.REQ_MULK) {
+            ReminderScheduler.scheduleDailyFeatures(context)
+        } else {
+            val reminder = ReminderScheduler.load(context).firstOrNull { it.id == id }
+            if (reminder != null && reminder.enabled) {
+                ReminderScheduler.schedule(context, reminder)
+            }
         }
     }
 }
