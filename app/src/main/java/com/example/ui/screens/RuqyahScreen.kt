@@ -160,6 +160,7 @@ private fun RuqyahCard(
     onToggleExpand: () -> Unit,
     onSpeak: () -> Unit
 ) {
+    val context = LocalContext.current
     Card(
         modifier = Modifier
             .fillMaxWidth()
