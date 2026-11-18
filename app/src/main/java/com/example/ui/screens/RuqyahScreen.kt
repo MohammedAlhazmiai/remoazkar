@@ -27,6 +27,8 @@ import com.example.data.RuqyahConditionsData
 import com.example.data.RuqyahData
 import com.example.data.RuqyahItem
 import com.example.data.TtsManager
+import com.example.data.tashkeelText
+import com.example.ui.components.SmartReaderBus
 import com.example.util.ShareUtil
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,6 +47,19 @@ fun RuqyahScreen(
         if (isConditions) emptyList() else RuqyahData.byCategory(category)
     }
     var expandedId by remember { mutableIntStateOf(-1) }
+
+    // نشر نص القسم الحالي للقارئ الذكي
+    LaunchedEffect(selectedTab, isConditions) {
+        val body = if (isConditions)
+            RuqyahConditionsData.conditions.joinToString("\n\n") { RuqyahConditionsData.fullText(it) }
+        else list.joinToString("\n\n") { "${it.title}. ${it.text}" }
+        if (body.isNotBlank()) {
+            SmartReaderBus.publish(
+                if (isConditions) "الرقية الشرعية — حسب الحالة" else "الرقية الشرعية — $category",
+                body
+            )
+        }
+    }
 
     var localFontIndex by remember { mutableIntStateOf(fontSizeIndex) }
     val textSize = when (localFontIndex) {
@@ -252,7 +267,7 @@ private fun RuqyahCard(
                 Column {
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        item.text,
+                        tashkeelText(item.text),
                         fontSize = textSize,
                         lineHeight = (textSize.value * 1.9f).sp,
                         fontWeight = FontWeight.Medium

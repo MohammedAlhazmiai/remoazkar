@@ -34,6 +34,7 @@ import com.example.data.HijriCalendar
 import com.example.data.HisnChapter
 import com.example.data.HisnRepository
 import com.example.data.TtsManager
+import com.example.ui.components.SmartReaderBus
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,7 +53,8 @@ fun HomeScreen(
     onAdvancedSettingsClick: () -> Unit,
     onSearchClick: () -> Unit,
     onFavoritesClick: () -> Unit,
-    onChapterClick: (Int) -> Unit
+    onChapterClick: (Int) -> Unit,
+    onMenuClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val hijri = remember { HijriCalendar.today() }

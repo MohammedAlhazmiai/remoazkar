@@ -21,6 +21,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.HisnRepository
 import com.example.data.TtsManager
+import com.example.data.tashkeelText
+import com.example.ui.components.SmartReaderBus
+import com.example.ui.components.buildReadableText
 import com.example.util.FavKeys
 import com.example.util.ShareUtil
 
@@ -39,6 +42,15 @@ fun HisnChapterScreen(
         HisnRepository.chapter(chapterId)
     }
     val counters = remember(chapterId) { mutableStateMapOf<Int, Int>() }
+
+    // نشر نص الباب للقارئ الذكي (الزر العائم)
+    LaunchedEffect(chapter?.id, chapter?.items?.size) {
+        val c = chapter ?: return@LaunchedEffect
+        SmartReaderBus.publish(
+            c.title,
+            buildReadableText(c.title, c.items.map { it.text })
+        )
+    }
 
     var localFontIndex by remember { mutableIntStateOf(fontSizeIndex) }
     val textSize = when (localFontIndex) {
@@ -113,7 +125,7 @@ fun HisnChapterScreen(
                 Card(shape = RoundedCornerShape(18.dp)) {
                     Column(Modifier.padding(16.dp)) {
                         Text(
-                            text = item.text,
+                            text = tashkeelText(item.text),
                             fontSize = textSize,
                             lineHeight = textSize * 1.7f
                         )

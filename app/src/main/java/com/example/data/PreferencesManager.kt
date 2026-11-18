@@ -22,6 +22,9 @@ class PreferencesManager(private val context: Context) {
         val FONT_SIZE_KEY = intPreferencesKey("font_size_index")
         val AZKAR_TIME_HOUR_KEY = intPreferencesKey("azkar_time_hour")
         val AZKAR_TIME_MINUTE_KEY = intPreferencesKey("azkar_time_minute")
+        val LANGUAGE_KEY = stringPreferencesKey("app_language")
+        val FONT_FAMILY_KEY = intPreferencesKey("font_family_index")
+        val TASHKEEL_KEY = booleanPreferencesKey("tashkeel_enabled")
 
         /** ملف SharedPreferences مرآة للقراءة المتزامنة من مستقبِل الإشعارات. */
         private const val MIRROR_FILE = "rim_mirror"
@@ -113,6 +116,33 @@ class PreferencesManager(private val context: Context) {
             val minute = preferences[AZKAR_TIME_MINUTE_KEY] ?: 30
             hour to minute
         }
+
+    val languageFlow: Flow<String> = context.dataStore.data
+        .map { preferences -> preferences[LANGUAGE_KEY] ?: AppLocale.ARABIC }
+
+    val fontFamilyFlow: Flow<Int> = context.dataStore.data
+        .map { preferences -> preferences[FONT_FAMILY_KEY] ?: 0 }
+
+    val tashkeelFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences -> preferences[TASHKEEL_KEY] ?: true }
+
+    suspend fun setLanguage(code: String) {
+        context.dataStore.edit { preferences ->
+            preferences[LANGUAGE_KEY] = code
+        }
+    }
+
+    suspend fun setFontFamily(index: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[FONT_FAMILY_KEY] = index.coerceIn(0, 20)
+        }
+    }
+
+    suspend fun setTashkeel(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[TASHKEEL_KEY] = enabled
+        }
+    }
 
     suspend fun setDarkMode(enabled: Boolean) {
         context.dataStore.edit { preferences ->

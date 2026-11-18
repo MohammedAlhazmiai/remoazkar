@@ -23,6 +23,9 @@ import androidx.compose.ui.unit.sp
 import com.example.data.Ayah
 import com.example.data.QuranRepository
 import com.example.data.TtsManager
+import com.example.data.tashkeelText
+import com.example.ui.components.SmartReaderBus
+import com.example.ui.components.buildReadableText
 import com.example.util.FavKeys
 import com.example.util.ShareUtil
 
@@ -54,6 +57,16 @@ fun QuranReaderScreen(
     }
 
     val title = surah?.name ?: "صفحة $pageNumber"
+
+    // نشر نص الصفحة/السورة للقارئ الذكي
+    LaunchedEffect(title, ayahs.size) {
+        if (ayahs.isNotEmpty()) {
+            SmartReaderBus.publish(
+                title,
+                buildReadableText(title, ayahs.map { "${it.text} (${it.surah}:${it.number})" })
+            )
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -115,7 +128,7 @@ fun QuranReaderScreen(
                 Card(shape = RoundedCornerShape(16.dp)) {
                     Column(Modifier.padding(14.dp)) {
                         Text(
-                            text = ayah.text,
+                            text = tashkeelText(ayah.text),
                             fontSize = textSize,
                             lineHeight = textSize * 1.9f,
                             textAlign = TextAlign.Justify

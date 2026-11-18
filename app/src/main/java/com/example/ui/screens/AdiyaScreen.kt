@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.sp
 import com.example.data.AdiyaData
 import com.example.data.DuaItem
 import com.example.data.TtsManager
+import com.example.data.tashkeelText
+import com.example.ui.components.SmartReaderBus
 import com.example.util.ShareUtil
 
 /**
@@ -43,6 +45,14 @@ fun AdiyaScreen(
     val category = categories[selectedTab]
     val list = remember(category) { AdiyaData.byCategory(category) }
     var expandedId by remember { mutableIntStateOf(-1) }
+
+    // نشر نص القسم الحالي للقارئ الذكي
+    LaunchedEffect(selectedTab) {
+        val body = list.joinToString("\n\n") { "${it.title}. ${it.text}" }
+        if (body.isNotBlank()) {
+            SmartReaderBus.publish("الأدعية النبوية — $category", body)
+        }
+    }
     var localFontIndex by remember { mutableIntStateOf(fontSizeIndex) }
 
     val textSize = when (localFontIndex) {
@@ -228,7 +238,7 @@ private fun AdiyaCard(
                 Column {
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        item.text,
+                        tashkeelText(item.text),
                         fontSize = textSize,
                         lineHeight = (textSize.value * 1.9f).sp,
                         fontWeight = FontWeight.Medium
