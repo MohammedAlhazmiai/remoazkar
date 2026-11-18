@@ -6,16 +6,26 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.AzkarRepository
+import com.example.data.Ayah
+import com.example.data.HisnChapter
+import com.example.data.HisnItem
+import com.example.data.HisnRepository
+import com.example.data.QuranRepository
+import com.example.data.TtsManager
+import com.example.util.FavKeys
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -24,115 +34,167 @@ fun SearchScreen(
     onToggleFavorite: (String) -> Unit,
     onBackClick: () -> Unit
 ) {
-    var searchQuery by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    var query by remember { mutableStateOf("") }
+    var mode by remember { mutableStateOf(0) } // 0: الكل، 1: القرآن، 2: الأذكار
 
-    val filteredList = remember(searchQuery) {
-        if (searchQuery.isBlank()) {
-            emptyList()
-        } else {
-            AzkarRepository.zikrList.filter {
-                it.title.contains(searchQuery, ignoreCase = true) ||
-                        it.content.contains(searchQuery, ignoreCase = true) ||
-                        it.virtue.contains(searchQuery, ignoreCase = true)
-            }
+    val quranResults: List<Ayah> = remember(query, mode) {
+        if (query.trim().length < 2 || mode == 2) emptyList()
+        else {
+            QuranRepository.ensureLoaded(context)
+            QuranRepository.search(context, query, 150)
+        }
+    }
+    val hisnResults: List<Pair<HisnChapter, HisnItem>> = remember(query, mode) {
+        if (query.trim().length < 2 || mode == 1) emptyList()
+        else {
+            HisnRepository.ensureLoaded(context)
+            HisnRepository.search(context, query, 150)
         }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    TextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = { Text("ابحث في الأذكار والأدعية...") },
-                        singleLine = true,
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                            unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                            disabledContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                            focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
-                            unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("search_input")
-                    )
-                },
+                title = { Text("البحث الشامل", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onBackClick, modifier = Modifier.testTag("back_button")) {
+                    IconButton(onClick = onBackClick) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع")
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+                }
             )
         }
-    ) { paddingVals ->
+    ) { padding ->
         Column(
             modifier = Modifier
+                .padding(padding)
                 .fillMaxSize()
-                .padding(paddingVals)
-                .padding(16.dp)
         ) {
-            if (searchQuery.isBlank()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "اكتب كلمة للبحث في جميع الأذكار والأدعية",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                placeholder = { Text("ابحث في القرآن والأذكار…") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                singleLine = true,
+                shape = RoundedCornerShape(16.dp)
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf("الكل", "القرآن", "الأذكار").forEachIndexed { index, label ->
+                    FilterChip(
+                        selected = mode == index,
+                        onClick = { mode = index },
+                        label = { Text(label, fontSize = 12.sp) }
                     )
                 }
-            } else if (filteredList.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
+            }
+
+            if (query.trim().length < 2) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        "لا توجد نتائج مطابقة لبحثك",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        "اكتب حرفين على الأقل للبحث\nفي 6236 آية و291 ذكرًا",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    items(filteredList) { zikr ->
-                        val isFavorite = favorites.contains(zikr.id.toString())
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
+                return@Column
+            }
+
+            LazyColumn(
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (quranResults.isNotEmpty()) {
+                    item {
+                        Text(
+                            "القرآن (${quranResults.size})",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                    }
+                    items(quranResults, key = { "q-${it.key}" }) { ayah ->
+                        val favKey = FavKeys.ayah(ayah.surah, ayah.number)
+                        Card(shape = RoundedCornerShape(14.dp)) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text(ayah.text, fontSize = 17.sp, lineHeight = 30.sp)
+                                Spacer(Modifier.height(6.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        text = zikr.title,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary
+                                        "سورة ${ayah.surah} • آية ${ayah.number}",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                    IconButton(onClick = { onToggleFavorite(zikr.id.toString()) }) {
+                                    Spacer(Modifier.weight(1f))
+                                    IconButton(onClick = { TtsManager.toggle(ayah.text) }) {
                                         Icon(
-                                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                            contentDescription = null,
-                                            tint = if (isFavorite) androidx.compose.ui.graphics.Color.Red else MaterialTheme.colorScheme.onSurfaceVariant
+                                            if (TtsManager.isSpeaking) Icons.Default.Stop else Icons.Default.PlayArrow,
+                                            contentDescription = "قراءة"
+                                        )
+                                    }
+                                    IconButton(onClick = { onToggleFavorite(favKey) }) {
+                                        Icon(
+                                            if (favorites.contains(favKey)) Icons.Default.Star else Icons.Default.StarBorder,
+                                            contentDescription = "مفضلة"
                                         )
                                     }
                                 }
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(text = zikr.content, style = MaterialTheme.typography.bodyMedium, fontSize = 16.sp)
                             }
                         }
+                    }
+                }
+
+                if (hisnResults.isNotEmpty()) {
+                    item {
+                        Text(
+                            "الأذكار (${hisnResults.size})",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                    items(hisnResults.size) { index ->
+                        val (chapter, item) = hisnResults[index]
+                        Card(shape = RoundedCornerShape(14.dp)) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text(
+                                    chapter.title,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(item.text, fontSize = 16.sp, lineHeight = 28.sp)
+                                Spacer(Modifier.height(4.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Spacer(Modifier.weight(1f))
+                                    IconButton(onClick = { TtsManager.toggle(item.text) }) {
+                                        Icon(
+                                            if (TtsManager.isSpeaking) Icons.Default.Stop else Icons.Default.PlayArrow,
+                                            contentDescription = "قراءة"
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (quranResults.isEmpty() && hisnResults.isEmpty()) {
+                    item {
+                        Text(
+                            "لا توجد نتائج مطابقة",
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 24.dp)
+                        )
                     }
                 }
             }

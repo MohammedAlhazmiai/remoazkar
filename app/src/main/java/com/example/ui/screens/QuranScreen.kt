@@ -1,341 +1,238 @@
 package com.example.ui.screens
 
-import android.media.MediaPlayer
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.room.QuranDatabase
-import com.example.data.room.SurahEntity
-import kotlinx.coroutines.delay
+import com.example.data.QuranRepository
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuranScreen(
+    onSurahClick: (Int) -> Unit,
+    onPageClick: (Int) -> Unit,
+    onSearchClick: () -> Unit,
     onBackClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val quranDao = remember { QuranDatabase.getDatabase(context).quranDao() }
+    var mode by remember { mutableStateOf(0) }
+    var query by remember { mutableStateOf("") }
 
-    var searchQuery by remember { mutableStateOf("") }
-    var pageJumpQuery by remember { mutableStateOf("") }
-    var showJumpDialog by remember { mutableStateOf(false) }
-
-    val surahsFlow = remember(searchQuery) {
-        if (searchQuery.isBlank()) quranDao.getAllSurahs()
-        else quranDao.searchSurahs(searchQuery)
+    val surahs = remember {
+        QuranRepository.ensureLoaded(context)
+        QuranRepository.surahs.toList()
     }
-    val surahs by surahsFlow.collectAsState(initial = emptyList())
 
-    var selectedSurah by remember { mutableStateOf<SurahEntity?>(null) }
-    var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
-    var isPlaying by remember { mutableStateOf(false) }
-    var currentPosition by remember { mutableIntStateOf(0) }
-    var duration by remember { mutableIntStateOf(100) }
-    var isSeeking by remember { mutableStateOf(false) }
-
-    LaunchedEffect(isPlaying, isSeeking) {
-        while (isPlaying && !isSeeking) {
-            mediaPlayer?.let { player ->
-                try {
-                    currentPosition = player.currentPosition
-                    duration = player.duration.coerceAtLeast(1)
-                } catch (e: Exception) {
-                    // ignore
-                }
-            }
-            delay(500)
+    val filtered = remember(query, surahs) {
+        if (query.isBlank()) surahs
+        else surahs.filter {
+            it.name.contains(query) || it.englishName.contains(query, true) ||
+                it.number.toString() == query.trim()
         }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            mediaPlayer?.release()
-        }
-    }
-
-    fun playAudio(url: String) {
-        try {
-            mediaPlayer?.release()
-            mediaPlayer = MediaPlayer().apply {
-                setDataSource(url)
-                prepareAsync()
-                setOnPreparedListener {
-                    start()
-                    isPlaying = true
-                    duration = this.duration.coerceAtLeast(1)
-                }
-                setOnCompletionListener {
-                    isPlaying = false
-                    currentPosition = 0
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    fun stopAudio() {
-        mediaPlayer?.stop()
-        mediaPlayer?.release()
-        mediaPlayer = null
-        isPlaying = false
-        currentPosition = 0
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    if (selectedSurah == null) {
-                        TextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            placeholder = { Text("بحث عن سورة...") },
-                            singleLine = true,
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                                unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                                disabledContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                                focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
-                                unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    } else {
-                        Text("سورة ${selectedSurah!!.name}", fontWeight = FontWeight.Bold)
-                    }
-                },
+                title = { Text("القرآن الكريم كاملًا", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(
-                        onClick = {
-                            if (selectedSurah != null) {
-                                stopAudio()
-                                selectedSurah = null
-                            } else {
-                                stopAudio()
-                                onBackClick()
-                            }
-                        },
-                        modifier = Modifier.testTag("back_button")
-                    ) {
+                    IconButton(onClick = onBackClick) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع")
                     }
                 },
                 actions = {
-                    if (selectedSurah == null) {
-                        IconButton(onClick = { showJumpDialog = true }) {
-                            Icon(Icons.Default.Bookmark, contentDescription = "الانتقال للصفحة")
-                        }
+                    IconButton(onClick = onSearchClick) {
+                        Icon(Icons.Default.Search, contentDescription = "بحث في الآيات")
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+                }
             )
         }
-    ) { paddingVals ->
-        if (selectedSurah == null) {
-            LazyColumn(
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+        ) {
+            Row(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingVals)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                items(surahs) { surah ->
-                    Card(
+                val tabs = listOf("السور", "الصفحات", "الأجزاء", "الأحزاب")
+                tabs.forEachIndexed { index, label ->
+                    FilterChip(
+                        selected = mode == index,
+                        onClick = { mode = index },
+                        label = { Text(label, fontSize = 13.sp) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            when (mode) {
+                0 -> {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { selectedSurah = surah }
-                            .testTag("surah_${surah.number}"),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        placeholder = { Text("ابحث باسم السورة أو رقمها") },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                    Text(
+                        text = "114 سورة • 6236 آية • 604 صفحة",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
+                    )
+                    LazyColumn(
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .padding(16.dp)
-                                .fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                    modifier = Modifier.size(40.dp)
+                        items(filtered, key = { it.number }) { surah ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onSurahClick(surah.number) },
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Box(contentAlignment = Alignment.Center) {
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = MaterialTheme.colorScheme.primaryContainer
+                                    ) {
                                         Text(
-                                            text = "${surah.number}",
+                                            text = surah.number.toString(),
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                                             fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                            fontSize = 13.sp
+                                        )
+                                    }
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(surah.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                        Text(
+                                            text = "${surah.revelationType} • ${surah.ayahCount} آية • صفحة ${surah.pageStart}",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Column {
-                                    Text(
-                                        text = "سورة ${surah.name}",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "${surah.revelationType} • ${surah.numberOfAyahs} آية • صفحة ${surah.pageNumber}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                    )
-                                }
                             }
-                            Icon(Icons.Default.VolumeUp, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         }
                     }
                 }
-            }
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingVals)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .padding(16.dp)
-                            .fillMaxWidth()
+
+                1 -> {
+                    Text(
+                        text = "اختر صفحة من المصحف (1 - 604)",
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
+                    )
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(5),
+                        contentPadding = PaddingValues(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(
-                                    text = "تلاوة سورة ${selectedSurah!!.name}",
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                                Text(
-                                    text = if (isPlaying) "جاري التشغيل..." else "صفحة ${selectedSurah!!.pageNumber}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    if (isPlaying) {
-                                        stopAudio()
-                                    } else {
-                                        playAudio(selectedSurah!!.audioUrl)
-                                    }
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = if (isPlaying) Icons.Default.PauseCircle else Icons.Default.PlayCircle,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(48.dp),
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-
-                        if (isPlaying) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Slider(
-                                value = currentPosition.toFloat(),
-                                onValueChange = { newValue ->
-                                    isSeeking = true
-                                    currentPosition = newValue.toInt()
-                                },
-                                onValueChangeFinished = {
-                                    isSeeking = false
-                                    mediaPlayer?.seekTo(currentPosition)
-                                },
-                                valueRange = 0f..duration.toFloat(),
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                        gridItems((1..604).toList()) { page ->
+                            NumberTile(page.toString()) { onPageClick(page) }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Card(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
+                2 -> {
+                    Text(
+                        text = "الأجزاء الثلاثون",
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
+                    )
                     LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        item {
-                            Text(
-                                text = selectedSurah!!.versesSerialized,
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontSize = 22.sp,
-                                lineHeight = 38.sp,
-                                textAlign = TextAlign.Center,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                        items((1..30).toList()) { juz ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onPageClick(QuranRepository.pageOfJuz(juz)) },
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("الجزء $juz", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                    Spacer(Modifier.weight(1f))
+                                    Text(
+                                        "صفحة ${QuranRepository.pageOfJuz(juz)}",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                else -> {
+                    Text(
+                        text = "الأحزاب (240 حزبًا)",
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
+                    )
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(6),
+                        contentPadding = PaddingValues(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        gridItems((1..240).toList()) { hizb ->
+                            NumberTile(hizb.toString()) {
+                                onPageClick(QuranRepository.pageOfHizb(hizb))
+                            }
                         }
                     }
                 }
             }
         }
+    }
+}
 
-        if (showJumpDialog) {
-            AlertDialog(
-                onDismissRequest = { showJumpDialog = false },
-                title = { Text("الانتقال إلى صفحة") },
-                text = {
-                    OutlinedTextField(
-                        value = pageJumpQuery,
-                        onValueChange = { pageJumpQuery = it },
-                        label = { Text("رقم الصفحة (1 - 604)") },
-                        singleLine = true
-                    )
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            showJumpDialog = false
-                            pageJumpQuery = ""
-                        }
-                    ) {
-                        Text("انتقال")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showJumpDialog = false }) {
-                        Text("إلغاء")
-                    }
-                }
-            )
+@Composable
+private fun NumberTile(label: String, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .height(48.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(label, fontSize = 14.sp, textAlign = TextAlign.Center)
         }
     }
 }

@@ -3,10 +3,8 @@ package com.example.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -15,423 +13,279 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.AzkarCategory
-import com.example.data.AzkarRepository
-import kotlinx.coroutines.delay
+import com.example.data.HijriCalendar
+import com.example.data.HisnChapter
+import com.example.data.HisnRepository
+import com.example.data.TtsManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onCategoryClick: (String) -> Unit,
+    onQuranClick: () -> Unit,
+    onHisnClick: () -> Unit,
     onTasbeehClick: () -> Unit,
     onRemindersClick: () -> Unit,
-    onQuranClick: () -> Unit,
-    onAudioAthkarClick: () -> Unit,
+    onHijriClick: () -> Unit,
+    onCustomAzkarClick: () -> Unit,
     onAiRobotClick: () -> Unit,
     onSpiritualCompanionClick: () -> Unit,
+    onWirdClick: () -> Unit,
     onAdvancedSettingsClick: () -> Unit,
     onSearchClick: () -> Unit,
-    onFavoritesClick: () -> Unit
+    onFavoritesClick: () -> Unit,
+    onChapterClick: (Int) -> Unit
 ) {
-    val dailyHadith = "«من صلى علي صلاة صلى الله عليه بها عشرا» رواه مسلم"
-    val dailyAyah = "﴿أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ﴾ [الرعد: 28]"
-
-    val snackbarHostState = remember { SnackbarHostState() }
-
-    LaunchedEffect(Unit) {
-        delay(600)
-        snackbarHostState.showSnackbar(
-            message = "هذا التطبيق من برمجة وتطوير المطور محمد الحزمي - جميع الحقوق محفوظة للمطور 2026",
-            duration = SnackbarDuration.Long
-        )
+    val context = LocalContext.current
+    val hijri = remember { HijriCalendar.today() }
+    val featured = remember {
+        HisnRepository.ensureLoaded(context)
+        HisnRepository.featuredIds().mapNotNull { HisnRepository.chapter(it) }
     }
+    val daily = remember(featured) { featured.firstOrNull() }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Spa,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            "ريمواذكار",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp
-                        )
+                    Column {
+                        Text("ريمواذكار", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                        Text(hijri.formatted, fontSize = 11.sp)
                     }
                 },
                 actions = {
-                    IconButton(onClick = onAdvancedSettingsClick, modifier = Modifier.testTag("settings_button")) {
-                        Icon(Icons.Default.Settings, contentDescription = "الإعدادات")
-                    }
-                    IconButton(onClick = onFavoritesClick, modifier = Modifier.testTag("favorites_button")) {
-                        Icon(Icons.Default.Favorite, contentDescription = "المفضلة", tint = MaterialTheme.colorScheme.secondary)
-                    }
-                    IconButton(onClick = onSearchClick, modifier = Modifier.testTag("search_button")) {
+                    IconButton(onClick = onSearchClick) {
                         Icon(Icons.Default.Search, contentDescription = "بحث")
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                    IconButton(onClick = onFavoritesClick) {
+                        Icon(Icons.Default.Star, contentDescription = "المفضلة")
+                    }
+                    IconButton(onClick = onAdvancedSettingsClick) {
+                        Icon(Icons.Default.Settings, contentDescription = "الإعدادات")
+                    }
+                }
             )
         }
-    ) { paddingVals ->
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+    ) { padding ->
+        LazyColumn(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingVals)
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(vertical = 16.dp)
+                .padding(padding)
+                .fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Daily Inspiration Banner
-            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(2) }) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("daily_banner"),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .padding(20.dp)
-                            .fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "💡 إشراقة إيمانية",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.secondary,
-                            fontWeight = FontWeight.Bold
+            item {
+                HeroCard(daily)
+            }
+
+            item {
+                Text("الأقسام", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            }
+
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FeatureCard(
+                            "القرآن الكريم", "114 سورة كاملة", Icons.Default.MenuBook,
+                            Modifier.weight(1f), onQuranClick
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = dailyAyah,
-                            style = MaterialTheme.typography.bodyLarge,
-                            textAlign = TextAlign.Center,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = dailyHadith,
-                            style = MaterialTheme.typography.bodyMedium,
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                        FeatureCard(
+                            "حصن المسلم", "132 بابًا", Icons.Default.Security,
+                            Modifier.weight(1f), onHisnClick
                         )
                     }
-                }
-            }
-
-            // Quick Tools Row 1: Tasbeeh & Auto Reminders
-            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(2) }) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Card(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable(onClick = onTasbeehClick)
-                            .testTag("tasbeeh_card"),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Icons.Default.RadioButtonChecked, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("المسبحة", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                Text("التسبيح", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
-                            }
-                        }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FeatureCard(
+                            "المسبحة", "عدّ أذكارك", Icons.Default.TouchApp,
+                            Modifier.weight(1f), onTasbeehClick
+                        )
+                        FeatureCard(
+                            "تذكيراتي", "أوقات تحددها", Icons.Default.Alarm,
+                            Modifier.weight(1f), onRemindersClick
+                        )
                     }
-
-                    Card(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable(onClick = onRemindersClick)
-                            .testTag("reminders_card"),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.secondary),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Icons.Default.NotificationsActive, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondary)
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("التذكيرات", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                Text("تلقائية", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
-                            }
-                        }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FeatureCard(
+                            "التقويم الهجري", "المناسبات", Icons.Default.CalendarMonth,
+                            Modifier.weight(1f), onHijriClick
+                        )
+                        FeatureCard(
+                            "أذكاري الخاصة", "أضف وعدّل", Icons.Default.EditNote,
+                            Modifier.weight(1f), onCustomAzkarClick
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FeatureCard(
+                            "المساعد الصوتي", "الروبوت يقرأ", Icons.Default.RecordVoiceOver,
+                            Modifier.weight(1f), onAiRobotClick
+                        )
+                        FeatureCard(
+                            "الرفيق الروحي", "حسب حالتك", Icons.Default.Favorite,
+                            Modifier.weight(1f), onSpiritualCompanionClick
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FeatureCard(
+                            "خطة الورد اليومي", "تابع تقدّمك وسلسلتك", Icons.Default.CheckCircle,
+                            Modifier.weight(1f), onWirdClick
+                        )
                     }
                 }
             }
 
-            // Quick Tools Row 2: Quran & Audio Athkar
-            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(2) }) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Card(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable(onClick = onQuranClick)
-                            .testTag("quran_card"),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Icons.Default.MenuBook, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("القرآن الكريم", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                Text("قراءة واستماع", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
-                            }
-                        }
-                    }
-
-                    Card(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable(onClick = onAudioAthkarClick)
-                            .testTag("audio_athkar_card"),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.secondary),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Icons.Default.Headphones, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondary)
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("أذكار صوتية", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                Text("تشغيل تلقائي", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Quick Tools Row 3: AI Voice Robot & Spiritual Companion
-            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(2) }) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Card(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable(onClick = onAiRobotClick)
-                            .testTag("ai_robot_card"),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Icons.Default.SmartToy, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("الروبوت الصوتي", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                                Text("بدون إنترنت", fontSize = 12.sp, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f))
-                            }
-                        }
-                    }
-
-                    Card(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable(onClick = onSpiritualCompanionClick)
-                            .testTag("spiritual_companion_card"),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.secondary),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Icons.Default.Favorite, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondary)
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("الرفيق الروحي", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                                Text("حسب حالتك", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Categories Header
-            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(2) }) {
+            item {
                 Text(
-                    text = "أقسام الأذكار والأدعية",
-                    style = MaterialTheme.typography.titleLarge,
+                    "أبواب مميزة من حصن المسلم",
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                    fontSize = 17.sp,
+                    modifier = Modifier.padding(top = 6.dp)
                 )
             }
 
-            // Category Cards
-            items(AzkarRepository.categories) { category ->
-                CategoryCard(category = category, onClick = { onCategoryClick(category.id) })
+            items(featured, key = { it.id }) { chapter ->
+                ChapterMiniRow(chapter) { onChapterClick(chapter.id) }
             }
         }
     }
 }
 
 @Composable
-fun CategoryCard(category: AzkarCategory, onClick: () -> Unit) {
+private fun HeroCard(chapter: HisnChapter?) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(130.dp)
-            .clickable(onClick = onClick)
-            .testTag("category_${category.id}"),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primaryContainer,
+                            MaterialTheme.colorScheme.tertiaryContainer
+                        )
+                    )
+                )
+                .padding(18.dp)
+        ) {
+            Column {
+                Text(
+                    "ذكر اليوم",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = chapter?.preview ?: "سبحان الله وبحمده، سبحان الله العظيم.",
+                    fontSize = 17.sp,
+                    lineHeight = 28.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    FilledTonalButton(
+                        onClick = {
+                            TtsManager.toggle(chapter?.preview ?: "سبحان الله وبحمده، سبحان الله العظيم.")
+                        }
+                    ) {
+                        Icon(
+                            if (TtsManager.isSpeaking) Icons.Default.Stop else Icons.Default.PlayArrow,
+                            contentDescription = null
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (TtsManager.isSpeaking) "إيقاف" else "اسمع الروبوت")
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        chapter?.title ?: "من أذكار المسلم",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FeatureCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = modifier
+            .height(104.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(18.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+                .padding(12.dp),
+            verticalArrangement = Arrangement.Center
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = when (category.iconName) {
-                            "wb_sunny" -> Icons.Default.WbSunny
-                            "nightlight" -> Icons.Default.Nightlight
-                            "bedtime" -> Icons.Default.Bedtime
-                            "mosque" -> Icons.Default.Mosque
-                            "menu_book" -> Icons.Default.MenuBook
-                            "history_edu" -> Icons.Default.HistoryEdu
-                            else -> Icons.Default.Security
-                        },
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer
-                ) {
-                    Text(
-                        text = "${category.count} ذكر",
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(26.dp)
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(title, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text(
+                subtitle,
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
 
-            Column {
-                Text(
-                    text = category.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = category.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                    maxLines = 1
+@Composable
+private fun ChapterMiniRow(chapter: HisnChapter, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.secondaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Bookmark,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
                 )
             }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(chapter.title, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text(
+                    "${chapter.items.size} ذكرًا • ${chapter.totalRepeats} تكرارًا",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Icon(Icons.Default.ChevronLeft, contentDescription = null)
         }
     }
 }

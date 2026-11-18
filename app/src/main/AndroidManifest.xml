@@ -2,6 +2,23 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- الشبكة: اختيارية تمامًا؛ كل المحتوى (القرآن والأذكار) مضمّن داخل التطبيق ويعمل بدون إنترنت -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- الإشعارات على أندرويد 13+ -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- إعادة جدولة التذكيرات بعد إعادة التشغيل -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- المنبّهات الدقيقة للتذكيرات في وقت محدد -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
+    <!-- إبقاء المعالج مستيقظًا أثناء تشغيل التنبيه -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
@@ -13,6 +30,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication">
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -20,10 +38,29 @@
             android:theme="@style/Theme.MyApplication">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- إعادة جدولة كل التذكيرات بعد إعادة تشغيل الجهاز -->
+        <receiver
+            android:name=".receiver.BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- مستقبل التذكيرات المجدولة -->
+        <receiver
+            android:name=".receiver.ReminderReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
     </application>
 
 </manifest>

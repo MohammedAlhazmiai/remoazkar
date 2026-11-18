@@ -2,20 +2,30 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.AzkarRepository
+import com.example.data.CustomAzkarStore
+import com.example.data.HisnRepository
+import com.example.data.QuranRepository
+import com.example.data.TtsManager
+
+private data class FavEntry(
+    val key: String,
+    val label: String,
+    val text: String
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -24,77 +34,109 @@ fun FavoritesScreen(
     onToggleFavorite: (String) -> Unit,
     onBackClick: () -> Unit
 ) {
-    val favoriteZikrList = AzkarRepository.zikrList.filter { favorites.contains(it.id.toString()) }
+    val context = LocalContext.current
+
+    val entries = remember(favorites) {
+        QuranRepository.ensureLoaded(context)
+        HisnRepository.ensureLoaded(context)
+        val out = ArrayList<FavEntry>()
+        favorites.forEach { key ->
+            when {
+                key.startsWith("ayah:") -> {
+                    val parts = key.removePrefix("ayah:").split(":")
+                    val s = parts.getOrNull(0)?.toIntOrNull()
+                    val n = parts.getOrNull(1)?.toIntOrNull()
+                    if (s != null && n != null) {
+                        val ayah = QuranRepository.ayahsOf(s).firstOrNull { it.number == n }
+                        if (ayah != null) {
+                            out.add(FavEntry(key, "سورة $s • آية $n", ayah.text))
+                        }
+                    }
+                }
+                key.startsWith("zikr:") -> {
+                    val parts = key.removePrefix("zikr:").split(":")
+                    val c = parts.getOrNull(0)?.toIntOrNull()
+                    val i = parts.getOrNull(1)?.toIntOrNull()
+                    if (c != null && i != null) {
+                        val chapter = HisnRepository.chapter(c)
+                        val item = chapter?.items?.getOrNull(i)
+                        if (chapter != null && item != null) {
+                            out.add(FavEntry(key, chapter.title, item.text))
+                        }
+                    }
+                }
+                key.startsWith("custom:") -> {
+                    val id = key.removePrefix("custom:").toLongOrNull()
+                    val zikr = CustomAzkarStore.load(context).firstOrNull { it.id == id }
+                    if (zikr != null) out.add(FavEntry(key, zikr.title, zikr.text))
+                }
+            }
+        }
+        out
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("الأذكار المفضلة", fontWeight = FontWeight.Bold) },
+                title = { Text("المفضلة", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onBackClick, modifier = Modifier.testTag("back_button")) {
+                    IconButton(onClick = onBackClick) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع")
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+                }
             )
         }
-    ) { paddingVals ->
-        if (favoriteZikrList.isEmpty()) {
+    ) { padding ->
+        if (entries.isEmpty()) {
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingVals),
+                    .padding(padding)
+                    .fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Default.FavoriteBorder,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        "لا توجد أذكار مفضلة مضافة بعد",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                }
+                Text(
+                    "لا توجد عناصر في المفضلة بعد\nاضغط النجمة بجانب أي آية أو ذكر.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         } else {
             LazyColumn(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingVals)
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                contentPadding = PaddingValues(vertical = 16.dp)
+                    .padding(padding)
+                    .fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                items(favoriteZikrList) { zikr ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = zikr.title,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                IconButton(onClick = { onToggleFavorite(zikr.id.toString()) }) {
-                                    Icon(Icons.Default.Favorite, contentDescription = "إزالة من المفضلة", tint = androidx.compose.ui.graphics.Color.Red)
+                items(entries.size) { index ->
+                    val entry = entries[index]
+                    Card(shape = RoundedCornerShape(16.dp)) {
+                        Column(Modifier.padding(14.dp)) {
+                            Text(
+                                entry.label,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(entry.text, fontSize = 16.sp, lineHeight = 28.sp)
+                            Spacer(Modifier.height(6.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(onClick = { TtsManager.toggle(entry.text) }) {
+                                    Icon(
+                                        if (TtsManager.isSpeaking) Icons.Default.Stop else Icons.Default.PlayArrow,
+                                        contentDescription = "قراءة"
+                                    )
+                                }
+                                Spacer(Modifier.weight(1f))
+                                IconButton(onClick = { onToggleFavorite(entry.key) }) {
+                                    Icon(
+                                        Icons.Default.Star,
+                                        contentDescription = "إزالة من المفضلة",
+                                        tint = MaterialTheme.colorScheme.tertiary
+                                    )
                                 }
                             }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(text = zikr.content, style = MaterialTheme.typography.bodyMedium, fontSize = 16.sp)
                         }
                     }
                 }
