@@ -46,7 +46,8 @@ fun RuqyahScreen(
     }
     var expandedId by remember { mutableIntStateOf(-1) }
 
-    val textSize = when (fontSizeIndex) {
+    var localFontIndex by remember { mutableIntStateOf(fontSizeIndex) }
+    val textSize = when (localFontIndex) {
         0 -> 16.sp
         2 -> 24.sp
         else -> 20.sp

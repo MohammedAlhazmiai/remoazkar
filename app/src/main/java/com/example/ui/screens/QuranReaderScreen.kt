@@ -103,6 +103,12 @@ fun QuranReaderScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            item {
+                com.example.ui.components.ReadingFontSizeRow(
+                    selectedIndex = localFontIndex,
+                    onSelect = { localFontIndex = it }
+                )
+            }
             items(ayahs, key = { it.key }) { ayah ->
                 val favKey = FavKeys.ayah(ayah.surah, ayah.number)
                 val isFav = favorites.contains(favKey)

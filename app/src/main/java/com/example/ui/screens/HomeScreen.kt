@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,6 +61,13 @@ fun HomeScreen(
         HisnRepository.featuredIds().mapNotNull { HisnRepository.chapter(it) }
     }
     val daily = remember(featured) { featured.firstOrNull() }
+
+    // إشعار حقوق المطور: يظهر عند فتح الشاشة الرئيسية ويختفي تلقائيًا
+    var showCopyright by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        delay(6000)
+        showCopyright = false
+    }
 
     Scaffold(
         topBar = {
