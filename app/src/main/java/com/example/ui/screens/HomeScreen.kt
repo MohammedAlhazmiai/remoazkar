@@ -15,8 +15,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -33,6 +31,8 @@ fun HomeScreen(
     onRemindersClick: () -> Unit,
     onQuranClick: () -> Unit,
     onAudioAthkarClick: () -> Unit,
+    onAiRobotClick: () -> Unit,
+    onSpiritualCompanionClick: () -> Unit,
     onSearchClick: () -> Unit,
     onFavoritesClick: () -> Unit
 ) {
@@ -251,6 +251,72 @@ fun HomeScreen(
                             Column {
                                 Text("أذكار صوتية", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                                 Text("تشغيل تلقائي", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Quick Tools Row 3: AI Voice Robot & Spiritual Companion
+            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(2) }) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable(onClick = onAiRobotClick)
+                            .testTag("ai_robot_card"),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.SmartToy, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("الروبوت الصوتي", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Text("بدون إنترنت", fontSize = 12.sp, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f))
+                            }
+                        }
+                    }
+
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable(onClick = onSpiritualCompanionClick)
+                            .testTag("spiritual_companion_card"),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.secondary),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Favorite, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondary)
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("الرفيق الروحي", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Text("حسب حالتك", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
                             }
                         }
                     }

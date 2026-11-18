@@ -61,6 +61,12 @@ class MainActivity : ComponentActivity() {
                             onAudioAthkarClick = {
                                 navController.navigate("audio_athkar")
                             },
+                            onAiRobotClick = {
+                                navController.navigate("ai_robot")
+                            },
+                            onSpiritualCompanionClick = {
+                                navController.navigate("spiritual_companion")
+                            },
                             onSearchClick = {
                                 navController.navigate("search")
                             },
@@ -76,6 +82,16 @@ class MainActivity : ComponentActivity() {
                     }
                     composable("audio_athkar") {
                         AudioAthkarScreen(
+                            onBackClick = { navController.popBackStack() }
+                        )
+                    }
+                    composable("ai_robot") {
+                        AiVoiceAssistantScreen(
+                            onBackClick = { navController.popBackStack() }
+                        )
+                    }
+                    composable("spiritual_companion") {
+                        SpiritualCompanionScreen(
                             onBackClick = { navController.popBackStack() }
                         )
                     }
