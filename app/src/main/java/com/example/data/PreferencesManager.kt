@@ -19,7 +19,7 @@ class PreferencesManager(private val context: Context) {
         val SPEECH_RATE_KEY = floatPreferencesKey("speech_rate")
         val SPEECH_PITCH_KEY = floatPreferencesKey("speech_pitch")
         val NOTIFICATION_SOUND_KEY = booleanPreferencesKey("notification_sound")
-        val CUSTOM_TIME_KEY = stringSetPreferencesKey("custom_times")
+        val FONT_SIZE_KEY = intPreferencesKey("font_size_index")
     }
 
     val darkModeFlow: Flow<Boolean> = context.dataStore.data
@@ -45,6 +45,9 @@ class PreferencesManager(private val context: Context) {
 
     val notificationSoundFlow: Flow<Boolean> = context.dataStore.data
         .map { preferences -> preferences[NOTIFICATION_SOUND_KEY] ?: true }
+
+    val fontSizeFlow: Flow<Int> = context.dataStore.data
+        .map { preferences -> preferences[FONT_SIZE_KEY] ?: 1 } // 0: Small, 1: Medium, 2: Large
 
     suspend fun setDarkMode(enabled: Boolean) {
         context.dataStore.edit { preferences ->
@@ -96,6 +99,12 @@ class PreferencesManager(private val context: Context) {
     suspend fun setNotificationSound(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[NOTIFICATION_SOUND_KEY] = enabled
+        }
+    }
+
+    suspend fun setFontSize(index: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[FONT_SIZE_KEY] = index
         }
     }
 }

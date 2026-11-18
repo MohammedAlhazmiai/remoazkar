@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
             val speechRate by preferencesManager.speechRateFlow.collectAsState(initial = 1.0f)
             val speechPitch by preferencesManager.speechPitchFlow.collectAsState(initial = 1.0f)
             val notificationSound by preferencesManager.notificationSoundFlow.collectAsState(initial = true)
+            val fontSizeIndex by preferencesManager.fontSizeFlow.collectAsState(initial = 1)
 
             val navController = rememberNavController()
 
@@ -127,6 +128,12 @@ class MainActivity : ComponentActivity() {
                                     preferencesManager.setNotificationSound(sound)
                                 }
                             },
+                            fontSizeIndex = fontSizeIndex,
+                            onFontSizeChange = { index ->
+                                lifecycleScope.launch {
+                                    preferencesManager.setFontSize(index)
+                                }
+                            },
                             onBackClick = { navController.popBackStack() }
                         )
                     }
@@ -143,6 +150,7 @@ class MainActivity : ComponentActivity() {
                                     preferencesManager.toggleFavorite(zikrId)
                                 }
                             },
+                            fontSizeIndex = fontSizeIndex,
                             onBackClick = { navController.popBackStack() }
                         )
                     }

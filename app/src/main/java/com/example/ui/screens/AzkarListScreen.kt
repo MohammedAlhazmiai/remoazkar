@@ -29,12 +29,19 @@ fun AzkarListScreen(
     categoryId: String,
     favorites: Set<String>,
     onToggleFavorite: (String) -> Unit,
+    fontSizeIndex: Int,
     onBackClick: () -> Unit
 ) {
     val category = AzkarRepository.categories.find { it.id == categoryId }
     val zikrList = AzkarRepository.zikrList.filter { it.categoryId == categoryId }
 
     val countsState = remember { mutableStateMapOf<Int, Int>() }
+
+    val contentFontSize = when (fontSizeIndex) {
+        0 -> 16.sp
+        2 -> 22.sp
+        else -> 18.sp
+    }
 
     Scaffold(
         topBar = {
@@ -93,7 +100,10 @@ fun AzkarListScreen(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
                             )
-                            IconButton(onClick = { onToggleFavorite(zikr.id.toString()) }) {
+                            IconButton(
+                                onClick = { onToggleFavorite(zikr.id.toString()) },
+                                modifier = Modifier.testTag("favorite_btn_${zikr.id}")
+                            ) {
                                 Icon(
                                     imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                                     contentDescription = "المفضلة",
@@ -107,8 +117,8 @@ fun AzkarListScreen(
                         Text(
                             text = zikr.content,
                             style = MaterialTheme.typography.bodyLarge,
-                            fontSize = 18.sp,
-                            lineHeight = 28.sp,
+                            fontSize = contentFontSize,
+                            lineHeight = (contentFontSize.value * 1.5f).sp,
                             textAlign = TextAlign.Start,
                             color = MaterialTheme.colorScheme.onSurface
                         )

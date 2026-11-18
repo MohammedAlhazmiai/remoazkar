@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -26,6 +27,8 @@ fun AdvancedSettingsScreen(
     onSpeechPitchChange: (Float) -> Unit,
     notificationSound: Boolean,
     onToggleNotificationSound: (Boolean) -> Unit,
+    fontSizeIndex: Int,
+    onFontSizeChange: (Int) -> Unit,
     onBackClick: () -> Unit
 ) {
     Scaffold(
@@ -65,6 +68,43 @@ fun AdvancedSettingsScreen(
                         ) {
                             Text("الوضع الداكن (Night Mode)", fontSize = 15.sp)
                             Switch(checked = darkMode, onCheckedChange = onToggleDarkMode)
+                        }
+                    }
+                }
+            }
+
+            // Font Size Control
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Text("حجم الخط في شاشات القراءة", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        val fontSizes = listOf(
+                            0 to "صغير (16sp)",
+                            1 to "متوسط (18sp)",
+                            2 to "كبير (22sp)"
+                        )
+
+                        fontSizes.forEach { (index, label) ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onFontSizeChange(index) }
+                                    .padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(label, fontSize = 15.sp)
+                                RadioButton(
+                                    selected = fontSizeIndex == index,
+                                    onClick = { onFontSizeChange(index) }
+                                )
+                            }
                         }
                     }
                 }
