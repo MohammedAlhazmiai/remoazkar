@@ -55,12 +55,28 @@ class MainActivity : ComponentActivity() {
                             onRemindersClick = {
                                 navController.navigate("reminders")
                             },
+                            onQuranClick = {
+                                navController.navigate("quran")
+                            },
+                            onAudioAthkarClick = {
+                                navController.navigate("audio_athkar")
+                            },
                             onSearchClick = {
                                 navController.navigate("search")
                             },
                             onFavoritesClick = {
                                 navController.navigate("favorites")
                             }
+                        )
+                    }
+                    composable("quran") {
+                        QuranScreen(
+                            onBackClick = { navController.popBackStack() }
+                        )
+                    }
+                    composable("audio_athkar") {
+                        AudioAthkarScreen(
+                            onBackClick = { navController.popBackStack() }
                         )
                     }
                     composable(

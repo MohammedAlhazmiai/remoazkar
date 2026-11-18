@@ -31,6 +31,8 @@ fun HomeScreen(
     onCategoryClick: (String) -> Unit,
     onTasbeehClick: () -> Unit,
     onRemindersClick: () -> Unit,
+    onQuranClick: () -> Unit,
+    onAudioAthkarClick: () -> Unit,
     onSearchClick: () -> Unit,
     onFavoritesClick: () -> Unit
 ) {
@@ -50,7 +52,7 @@ fun HomeScreen(
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            "ريم وأذكار",
+                            "ريمواذكار",
                             fontWeight = FontWeight.Bold,
                             fontSize = 20.sp
                         )
@@ -80,6 +82,7 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(vertical = 16.dp)
         ) {
+            // Daily Inspiration Banner
             item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(2) }) {
                 Card(
                     modifier = Modifier
@@ -122,6 +125,7 @@ fun HomeScreen(
                 }
             }
 
+            // Quick Tools Row 1: Tasbeeh & Auto Reminders
             item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(2) }) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -133,9 +137,7 @@ fun HomeScreen(
                             .clickable(onClick = onTasbeehClick)
                             .testTag("tasbeeh_card"),
                         shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Row(
                             modifier = Modifier.padding(16.dp),
@@ -153,7 +155,7 @@ fun HomeScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text("المسبحة", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                Text("التسبيح الإلكتروني", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                                Text("التسبيح", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
                             }
                         }
                     }
@@ -164,9 +166,7 @@ fun HomeScreen(
                             .clickable(onClick = onRemindersClick)
                             .testTag("reminders_card"),
                         shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Row(
                             modifier = Modifier.padding(16.dp),
@@ -184,13 +184,80 @@ fun HomeScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text("التذكيرات", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                Text("الأذكار التلقائية", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                                Text("تلقائية", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
                             }
                         }
                     }
                 }
             }
 
+            // Quick Tools Row 2: Quran & Audio Athkar
+            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(2) }) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable(onClick = onQuranClick)
+                            .testTag("quran_card"),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.MenuBook, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("القرآن الكريم", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                Text("قراءة واستماع", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                            }
+                        }
+                    }
+
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable(onClick = onAudioAthkarClick)
+                            .testTag("audio_athkar_card"),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.secondary),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Headphones, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondary)
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("أذكار صوتية", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                Text("تشغيل تلقائي", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Categories Header
             item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(2) }) {
                 Text(
                     text = "أقسام الأذكار والأدعية",
@@ -200,6 +267,7 @@ fun HomeScreen(
                 )
             }
 
+            // Category Cards
             items(AzkarRepository.categories) { category ->
                 CategoryCard(category = category, onClick = { onCategoryClick(category.id) })
             }
