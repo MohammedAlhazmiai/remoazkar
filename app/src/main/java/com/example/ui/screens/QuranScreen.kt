@@ -13,20 +13,36 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.QuranRepository
-import com.example.data.Surah
+import com.example.data.room.QuranDatabase
+import com.example.data.room.SurahEntity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuranScreen(
     onBackClick: () -> Unit
 ) {
-    var selectedSurah by remember { mutableStateOf<Surah?>(null) }
+    val context = LocalContext.current
+    val quranDao = remember { QuranDatabase.getDatabase(context).quranDao() }
+
+    var searchQuery by remember { mutableStateOf("") }
+    var pageJumpQuery by remember { mutableStateOf("") }
+    var showJumpDialog by remember { mutableStateOf(false) }
+
+    val surahsFlow = remember(searchQuery) {
+        if (searchQuery.isBlank()) quranDao.getAllSurahs()
+        else quranDao.searchSurahs(searchQuery)
+    }
+    val surahs by surahsFlow.collectAsState(initial = emptyList())
+
+    var selectedSurah by remember { mutableStateOf<SurahEntity?>(null) }
     var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
 
@@ -65,7 +81,26 @@ fun QuranScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(selectedSurah?.name ?: "القرآن الكريم", fontWeight = FontWeight.Bold) },
+                title = {
+                    if (selectedSurah == null) {
+                        TextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text("بحث عن سورة...") },
+                            singleLine = true,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                                unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                                disabledContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                                focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+                                unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        Text("سورة ${selectedSurah!!.name}", fontWeight = FontWeight.Bold)
+                    }
+                },
                 navigationIcon = {
                     IconButton(
                         onClick = {
@@ -82,6 +117,13 @@ fun QuranScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع")
                     }
                 },
+                actions = {
+                    if (selectedSurah == null) {
+                        IconButton(onClick = { showJumpDialog = true }) {
+                            Icon(Icons.Default.Bookmark, contentDescription = "الانتقال للصفحة")
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         }
@@ -94,7 +136,7 @@ fun QuranScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(QuranRepository.surahs) { surah ->
+                items(surahs) { surah ->
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -133,7 +175,7 @@ fun QuranScreen(
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        text = "${surah.revelationType} • ${surah.numberOfAyahs} آية",
+                                        text = "${surah.revelationType} • ${surah.numberOfAyahs} آية • صفحة ${surah.pageNumber}",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                     )
@@ -152,7 +194,6 @@ fun QuranScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                // Audio Player Control Bar
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
@@ -167,12 +208,12 @@ fun QuranScreen(
                     ) {
                         Column {
                             Text(
-                                text = "الاستماع لتلاوة سورة ${selectedSurah!!.name}",
+                                text = "تلاوة سورة ${selectedSurah!!.name}",
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                             Text(
-                                text = if (isPlaying) "جاري التشغيل..." else "متوقف",
+                                text = if (isPlaying) "جاري التشغيل..." else "صفحة ${selectedSurah!!.pageNumber}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                             )
@@ -198,33 +239,63 @@ fun QuranScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Verses Reading View
-                LazyColumn(
+                Card(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
-                    items(selectedSurah!!.verses) { verse ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                        ) {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        item {
                             Text(
-                                text = verse,
+                                text = selectedSurah!!.versesSerialized,
                                 style = MaterialTheme.typography.bodyLarge,
-                                fontSize = 20.sp,
-                                lineHeight = 32.sp,
+                                fontSize = 22.sp,
+                                lineHeight = 38.sp,
                                 textAlign = TextAlign.Center,
-                                modifier = Modifier
-                                    .padding(16.dp)
-                                    .fillMaxWidth()
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
                 }
             }
+        }
+
+        if (showJumpDialog) {
+            AlertDialog(
+                onDismissRequest = { showJumpDialog = false },
+                title = { Text("الانتقال إلى صفحة") },
+                text = {
+                    OutlinedTextField(
+                        value = pageJumpQuery,
+                        onValueChange = { pageJumpQuery = it },
+                        label = { Text("رقم الصفحة (1 - 604)") },
+                        singleLine = true
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showJumpDialog = false
+                            pageJumpQuery = ""
+                        }
+                    ) {
+                        Text("انتقال")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showJumpDialog = false }) {
+                        Text("إلغاء")
+                    }
+                }
+            )
         }
     }
 }
