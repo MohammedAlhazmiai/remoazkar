@@ -79,10 +79,11 @@ fun QuranReaderScreen(
     }
 
     LaunchedEffect(renderer, pageIndex, pageCount) {
-        if (renderer != null && pageCount > 0) {
+        val activeRenderer = renderer
+        if (activeRenderer != null && pageCount > 0) {
             error = null
             val result = withContext(Dispatchers.IO) {
-                runCatching { renderer.render(pageIndex, 1500) }
+                runCatching { activeRenderer.render(pageIndex, 1500) }
             }
             bitmap = result.getOrNull()
             error = result.exceptionOrNull()?.let {
