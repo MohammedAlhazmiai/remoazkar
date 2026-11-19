@@ -49,6 +49,7 @@ import com.example.ui.components.SmartReaderBus
 import com.example.ui.components.SmartReaderFab
 import com.example.ui.components.TtsMiniBar
 import com.example.ui.screens.AboutScreen
+import com.example.ui.screens.AudioAzkarScreen
 import com.example.ui.screens.AdiyaScreen
 import com.example.ui.screens.AdvancedSettingsScreen
 import com.example.ui.screens.AiVoiceAssistantScreen
@@ -321,8 +322,13 @@ private fun AppRoot(
                         onMenuClick = { scope.launch { drawerState.open() } },
                         onKhatmahClick = { navController.navigate("khatmah") },
                         onNamesOfAllahClick = { navController.navigate("names_of_allah") },
-                        onProphetDuasClick = { navController.navigate("prophet_duas") }
+                        onProphetDuasClick = { navController.navigate("prophet_duas") },
+                        onAudioAzkarClick = { navController.navigate("audio_azkar") }
                     )
+                }
+
+                composable("audio_azkar") {
+                    AudioAzkarScreen(onBackClick = { navController.popBackStack() })
                 }
 
                 // ---------- الصفحات الدينية الجديدة ----------

@@ -5,7 +5,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -22,14 +21,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.R
 import com.example.data.HijriCalendar
 import com.example.data.HisnChapter
 import com.example.data.HisnRepository
@@ -57,7 +53,8 @@ fun HomeScreen(
     onMenuClick: () -> Unit = {},
     onKhatmahClick: () -> Unit = {},
     onNamesOfAllahClick: () -> Unit = {},
-    onProphetDuasClick: () -> Unit = {}
+    onProphetDuasClick: () -> Unit = {},
+    onAudioAzkarClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val hijri = remember { HijriCalendar.today() }
@@ -101,16 +98,16 @@ fun HomeScreen(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.28f),
+                            MaterialTheme.colorScheme.background,
+                            MaterialTheme.colorScheme.surface
+                        )
+                    )
+                )
         ) {
-            // خلفية إسلامية احترافية خفيفة خلف المحتوى
-            Image(
-                painter = painterResource(id = R.drawable.home_background),
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-                alpha = 0.18f
-            )
-
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
@@ -164,6 +161,16 @@ fun HomeScreen(
                         FeatureCard(
                             "الرفيق الروحي", "حسب حالتك", Icons.Default.Favorite,
                             Modifier.weight(1f), onSpiritualCompanionClick
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FeatureCard(
+                            "الأذكار الصوتية", "استمع للأذكار", Icons.Default.Headphones,
+                            Modifier.weight(1f), onAudioAzkarClick
+                        )
+                        FeatureCard(
+                            "حصن المسلم", "أذكار وأدعية", Icons.Default.Security,
+                            Modifier.weight(1f), onHisnClick
                         )
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -345,7 +352,7 @@ private fun HeroCard(chapter: HisnChapter?) {
                             contentDescription = null
                         )
                         Spacer(Modifier.width(6.dp))
-                        Text(if (TtsManager.isSpeaking) "إيقاف" else "اسمع الروبوت")
+                        Text(if (TtsManager.isSpeaking) "إيقاف" else "استمع للذكر")
                     }
                     Spacer(Modifier.width(10.dp))
                     Text(
@@ -371,7 +378,9 @@ private fun FeatureCard(
         modifier = modifier
             .height(104.dp)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(18.dp)
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Column(
             modifier = Modifier

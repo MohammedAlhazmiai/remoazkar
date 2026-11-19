@@ -63,8 +63,20 @@ object TtsManager {
                     val res = engine.setLanguage(locale)
                     if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED) {
                         lastError = "محرّك النطق العربي غير متوفر على هذا الجهاز"
+                    } else {
+                        val arabicVoice = engine.voices
+                            ?.filter { it.locale.language.equals("ar", ignoreCase = true) }
+                            ?.sortedWith(
+                                compareBy<android.speech.tts.Voice> { it.isNetworkConnectionRequired }
+                                    .thenByDescending { it.quality }
+                                    .thenBy { it.latency }
+                                    .thenByDescending { it.locale.country.equals("SA", ignoreCase = true) }
+                            )
+                            ?.firstOrNull()
+                        if (arabicVoice != null) engine.voice = arabicVoice
+                        lastError = null
                     }
-                    engine.setSpeechRate(rate)
+                    engine.setSpeechRate(rate.coerceIn(0.82f, 1.15f))
                     engine.setPitch(pitch)
                     engine.setAudioAttributes(
                         AudioAttributes.Builder()

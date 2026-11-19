@@ -25,6 +25,12 @@ import androidx.compose.ui.unit.sp
 import com.example.data.QuranRepository
 import com.example.data.TtsManager
 
+private const val BUNDLED_MUSHAF_PAGE_COUNT = 569
+
+private fun approximatePdfPage(standardPage: Int): Int =
+    (((standardPage - 1).coerceAtLeast(0).toDouble() * (BUNDLED_MUSHAF_PAGE_COUNT - 1)) / 603.0)
+        .toInt().coerceIn(1, BUNDLED_MUSHAF_PAGE_COUNT)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuranScreen(
@@ -103,7 +109,7 @@ fun QuranScreen(
                         shape = RoundedCornerShape(16.dp)
                     )
                     Text(
-                        text = "114 سورة • 6236 آية • 604 صفحة",
+                        text = "114 سورة • 6236 آية • ملف المصحف المرفق: 569 صفحة",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
@@ -138,7 +144,7 @@ fun QuranScreen(
                                     Column(Modifier.weight(1f)) {
                                         Text(surah.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                                         Text(
-                                            text = "${surah.revelationType} • ${surah.ayahCount} آية • صفحة ${surah.pageStart}",
+                                            text = "${surah.revelationType} • ${surah.ayahCount} آية",
                                             fontSize = 12.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -147,8 +153,8 @@ fun QuranScreen(
                                         onClick = {
                                             TtsManager.toggle(
                                                 "سورة ${surah.name}، ${surah.revelationType}، " +
-                                                    "عدد آياتها ${surah.ayahCount} آية، " +
-                                                    "تبدأ في صفحة ${surah.pageStart} من المصحف."
+                                                    "عدد آياتها ${surah.ayahCount} آية. " +
+                                                    "الموضع الذي يفتح في ملف المصحف تقريبي."
                                             )
                                         }
                                     ) {
@@ -167,7 +173,7 @@ fun QuranScreen(
 
                 1 -> {
                     Text(
-                        text = "اختر صفحة من المصحف (1 - 604)",
+                        text = "اختر صفحة من ملف المصحف (1 - 569)",
                         fontSize = 13.sp,
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
                     )
@@ -177,7 +183,7 @@ fun QuranScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        gridItems((1..604).toList()) { page ->
+                        gridItems((1..BUNDLED_MUSHAF_PAGE_COUNT).toList()) { page ->
                             NumberTile(page.toString()) { onPageClick(page) }
                         }
                     }
@@ -197,7 +203,7 @@ fun QuranScreen(
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { onPageClick(QuranRepository.pageOfJuz(juz)) },
+                                .clickable { onPageClick(approximatePdfPage(QuranRepository.pageOfJuz(juz))) },
                                 shape = RoundedCornerShape(14.dp)
                             ) {
                                 Row(
@@ -207,7 +213,7 @@ fun QuranScreen(
                                     Text("الجزء $juz", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                                     Spacer(Modifier.weight(1f))
                                     Text(
-                                        "صفحة ${QuranRepository.pageOfJuz(juz)}",
+                                        "صفحة تقريبية ${approximatePdfPage(QuranRepository.pageOfJuz(juz))}",
                                         fontSize = 12.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -231,7 +237,7 @@ fun QuranScreen(
                     ) {
                         gridItems((1..240).toList()) { hizb ->
                             NumberTile(hizb.toString()) {
-                                onPageClick(QuranRepository.pageOfHizb(hizb))
+                                onPageClick(approximatePdfPage(QuranRepository.pageOfHizb(hizb)))
                             }
                         }
                     }

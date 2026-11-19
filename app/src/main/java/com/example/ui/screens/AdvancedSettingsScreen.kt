@@ -1,5 +1,12 @@
 package com.example.ui.screens
 
+import android.Manifest
+import android.app.AlarmManager
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.example.data.AthkarReminderScheduler
 import com.example.data.PreferencesManager
 import kotlinx.coroutines.launch
@@ -37,6 +45,7 @@ fun AdvancedSettingsScreen(
     onFontSizeChange: (Int) -> Unit,
     onBackClick: () -> Unit
 ) {
+    val context = LocalContext.current
     Scaffold(
         topBar = {
             TopAppBar(
@@ -165,6 +174,42 @@ fun AdvancedSettingsScreen(
                         ) {
                             Text("صوت التنبيه مع الإشعارات", fontSize = 15.sp)
                             Switch(checked = notificationSound, onCheckedChange = onToggleNotificationSound)
+                        }
+                        val notificationsAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+                        Text(
+                            if (notificationsAllowed) "إذن الإشعارات: مفعّل" else "إذن الإشعارات: غير مفعّل",
+                            fontSize = 12.sp,
+                            color = if (notificationsAllowed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedButton(onClick = {
+                            val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                            runCatching { context.startActivity(intent) }
+                        }) {
+                            Icon(Icons.Default.NotificationsActive, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("فتح إعدادات إشعارات التطبيق")
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            val alarmManager = context.getSystemService(android.content.Context.ALARM_SERVICE) as AlarmManager
+                            val exactAllowed = alarmManager.canScheduleExactAlarms()
+                            Text(
+                                if (exactAllowed) "المنبّه الدقيق: مسموح" else "المنبّه الدقيق: غير مسموح؛ قد يتأخر التنبيه اليومي",
+                                modifier = Modifier.padding(top = 8.dp),
+                                fontSize = 12.sp,
+                                color = if (exactAllowed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                            )
+                            OutlinedButton(onClick = {
+                                val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                                    .setData(Uri.parse("package:${context.packageName}"))
+                                runCatching { context.startActivity(intent) }
+                            }) {
+                                Icon(Icons.Default.Alarm, contentDescription = null)
+                                Spacer(Modifier.width(6.dp))
+                                Text("إعداد وصول المنبّهات الدقيقة")
+                            }
                         }
                     }
                 }

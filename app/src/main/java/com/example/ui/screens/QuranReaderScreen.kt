@@ -1,33 +1,35 @@
 package com.example.ui.screens
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.pdf.PdfRenderer
+import android.os.ParcelFileDescriptor
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.StarBorder
-import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.NavigateBefore
+import androidx.compose.material.icons.filled.NavigateNext
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.Ayah
-import com.example.data.QuranRepository
-import com.example.data.TtsManager
-import com.example.data.tashkeelText
-import com.example.ui.components.SmartReaderBus
-import com.example.ui.components.buildReadableText
-import com.example.util.FavKeys
-import com.example.util.ShareUtil
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.Closeable
+import java.io.File
+import java.io.FileOutputStream
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,44 +42,70 @@ fun QuranReaderScreen(
     onBackClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val ayahs = remember(surahNumber, pageNumber, QuranRepository.isLoaded) {
-        QuranRepository.ensureLoaded(context)
-        if (surahNumber > 0) QuranRepository.ayahsOf(surahNumber)
-        else QuranRepository.byPage(pageNumber)
-    }
-    val surah = remember(surahNumber, QuranRepository.isLoaded) {
-        if (surahNumber > 0) QuranRepository.surah(surahNumber) else null
-    }
+    var renderer by remember(context) { mutableStateOf<BundledMushaf?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    var pageCount by remember { mutableIntStateOf(0) }
+    var pageIndex by remember { mutableIntStateOf((pageNumber - 1).coerceAtLeast(0)) }
+    var bitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var pageInput by remember { mutableStateOf("") }
 
-    var localFontIndex by remember { mutableIntStateOf(fontSizeIndex) }
-    val textSize = when (localFontIndex) {
-        0 -> 18.sp
-        2 -> 28.sp
-        else -> 23.sp
+    DisposableEffect(renderer) {
+        val openedRenderer = renderer
+        onDispose { runCatching { openedRenderer?.close() } }
     }
 
-    val title = surah?.name ?: "صفحة $pageNumber"
+    LaunchedEffect(context) {
+        val result = withContext(Dispatchers.IO) { runCatching { BundledMushaf(context) } }
+        renderer = result.getOrNull()
+        error = result.exceptionOrNull()?.let {
+            "تعذّر فتح ملف المصحف المرفق على هذا الجهاز. تحقّق من سلامة ملف PDF ثم أعد المحاولة."
+        }
+        isLoading = false
+    }
 
-    // نشر نص الصفحة/السورة للقارئ الذكي
-    LaunchedEffect(title, ayahs.size) {
-        if (ayahs.isNotEmpty()) {
-            SmartReaderBus.publish(
-                title,
-                buildReadableText(title, ayahs.map { "${it.text} (${it.surah}:${it.number})" })
-            )
+    LaunchedEffect(renderer) {
+        renderer?.let { opened ->
+            pageCount = opened.pageCount
+            if (surahNumber > 0) {
+                // pageStart مأخوذ من بيانات المصحف القياسي ذي 604 صفحات؛ الملف المرفق 569 صفحة، لذلك هذا انتقال تقريبي فقط.
+                val standardStart = runCatching {
+                    com.example.data.QuranRepository.surah(surahNumber)?.pageStart ?: 1
+                }.getOrDefault(1)
+                pageIndex = (((standardStart - 1).toDouble() * (pageCount - 1).coerceAtLeast(0)) / 603.0)
+                    .toInt().coerceIn(0, (pageCount - 1).coerceAtLeast(0))
+            }
         }
     }
+
+    LaunchedEffect(renderer, pageIndex, pageCount) {
+        if (renderer != null && pageCount > 0) {
+            error = null
+            val result = withContext(Dispatchers.IO) {
+                runCatching { renderer.render(pageIndex, 1500) }
+            }
+            bitmap = result.getOrNull()
+            error = result.exceptionOrNull()?.let {
+                "تعذّر عرض الصفحة ${pageIndex + 1} من ملف المصحف: ${it.localizedMessage ?: "ملف PDF غير صالح"}"
+            }
+            pageInput = (pageIndex + 1).toString()
+        }
+    }
+
+    val surahName = remember(surahNumber) {
+        if (surahNumber > 0) com.example.data.QuranRepository.surah(surahNumber)?.name else null
+    }
+    var dragDistance by remember { mutableFloatStateOf(0f) }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Column {
-                        Text(title, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                        Text(surahName?.let { "سورة $it" } ?: "المصحف الشريف", fontWeight = FontWeight.Bold, fontSize = 17.sp)
                         Text(
-                            text = if (surah != null)
-                                "${surah.revelationType} • ${surah.ayahCount} آية"
-                            else "صفحة $pageNumber من المصحف",
+                            if (surahNumber > 0) "موضع تقريبي؛ تنقّل يدويًا للتأكد من بداية السورة"
+                            else "صفحة ${pageIndex + 1} من ${pageCount.coerceAtLeast(0)}",
                             fontSize = 11.sp
                         )
                     }
@@ -88,94 +116,110 @@ fun QuranReaderScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = {
-                        val full = ayahs.joinToString(" ") { it.text }
-                        TtsManager.toggle(full)
-                    }) {
-                        Icon(
-                            if (TtsManager.isSpeaking) Icons.Default.Stop else Icons.Default.PlayArrow,
-                            contentDescription = "قراءة كاملة"
-                        )
+                    IconButton(onClick = { pageIndex = (pageIndex - 1).coerceAtLeast(0) }, enabled = pageIndex > 0) {
+                        Icon(Icons.Default.NavigateBefore, contentDescription = "الصفحة السابقة")
                     }
-                    IconButton(onClick = {
-                        ShareUtil.share(
-                            context,
-                            title + "\n\n" + ayahs.joinToString("\n") { "${it.text} (${it.surah}:${it.number})" }
-                        )
-                    }) {
-                        Icon(Icons.Default.Share, contentDescription = "مشاركة")
+                    IconButton(onClick = { pageIndex = (pageIndex + 1).coerceAtMost(pageCount - 1) }, enabled = pageIndex < pageCount - 1) {
+                        Icon(Icons.Default.NavigateNext, contentDescription = "الصفحة التالية")
                     }
                 }
             )
         }
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+        Column(
+            modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 10.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            item {
-                com.example.ui.components.ReadingFontSizeRow(
-                    selectedIndex = localFontIndex,
-                    onSelect = { localFontIndex = it }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = pageInput,
+                    onValueChange = { pageInput = it.filter(Char::isDigit).take(4) },
+                    modifier = Modifier.width(108.dp),
+                    label = { Text("رقم الصفحة") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
+                Button(onClick = {
+                    val entered = pageInput.toIntOrNull()
+                    if (entered != null && entered in 1..pageCount) pageIndex = entered - 1
+                }, enabled = pageCount > 0) { Text("اذهب") }
+                Text("${pageIndex + 1} / ${pageCount.coerceAtLeast(0)}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            items(ayahs, key = { it.key }) { ayah ->
-                val favKey = FavKeys.ayah(ayah.surah, ayah.number)
-                val isFav = favorites.contains(favKey)
-                Card(shape = RoundedCornerShape(16.dp)) {
-                    Column(Modifier.padding(14.dp)) {
-                        Text(
-                            text = tashkeelText(ayah.text),
-                            fontSize = textSize,
-                            lineHeight = textSize * 1.9f,
-                            textAlign = TextAlign.Justify
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.secondaryContainer
-                            ) {
-                                Text(
-                                    text = "${ayah.surah}:${ayah.number}",
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                    fontSize = 11.sp
-                                )
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = "جزء ${ayah.juz} • صفحة ${ayah.page}",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(Modifier.weight(1f))
-                            IconButton(onClick = { TtsManager.toggle(ayah.text) }) {
-                                Icon(
-                                    if (TtsManager.isSpeaking) Icons.Default.Stop else Icons.Default.PlayArrow,
-                                    contentDescription = "قراءة الآية",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            IconButton(onClick = { onToggleFavorite(favKey) }) {
-                                Icon(
-                                    if (isFav) Icons.Default.Star else Icons.Default.StarBorder,
-                                    contentDescription = "مفضلة",
-                                    tint = if (isFav) MaterialTheme.colorScheme.tertiary
-                                    else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            IconButton(onClick = {
-                                ShareUtil.share(context, "${ayah.text}\n\n[${ayah.surah}:${ayah.number}] — ريمواذكار")
-                            }) {
-                                Icon(Icons.Default.Share, contentDescription = "مشاركة")
-                            }
+            Spacer(Modifier.height(6.dp))
+            Card(
+                modifier = Modifier.weight(1f).fillMaxWidth().pointerInput(pageIndex, pageCount) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            if (dragDistance < -40f) pageIndex = (pageIndex + 1).coerceAtMost(pageCount - 1)
+                            if (dragDistance > 40f) pageIndex = (pageIndex - 1).coerceAtLeast(0)
+                            dragDistance = 0f
+                        },
+                        onHorizontalDrag = { change, amount ->
+                            dragDistance += amount
+                            change.consume()
                         }
+                    )
+                },
+                shape = RoundedCornerShape(8.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    when {
+                        error != null -> Text(error!!, modifier = Modifier.padding(24.dp), color = MaterialTheme.colorScheme.error)
+                        bitmap != null -> Image(
+                            bitmap = bitmap!!.asImageBitmap(),
+                            contentDescription = "صفحة كاملة من المصحف رقم ${pageIndex + 1}",
+                            modifier = Modifier.fillMaxSize().padding(4.dp),
+                            alignment = Alignment.Center,
+                            contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                        )
+                        isLoading -> CircularProgressIndicator()
+                        else -> CircularProgressIndicator()
                     }
                 }
             }
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("اسحب أفقيًا أو استخدم الأسهم لتقليب الصفحات", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(Icons.Default.MenuBook, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            }
         }
+    }
+}
+
+private class BundledMushaf(context: Context) : Closeable {
+    private val file = File(context.cacheDir, "remoazkar-mushaf.pdf")
+    private val descriptor: ParcelFileDescriptor
+    private val renderer: PdfRenderer
+
+    init {
+        if (!file.exists() || file.length() == 0L) {
+            context.assets.open("mushaf.pdf").use { input ->
+                FileOutputStream(file).use { output -> input.copyTo(output) }
+            }
+        }
+        descriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+        renderer = PdfRenderer(descriptor)
+    }
+
+    val pageCount: Int get() = renderer.pageCount
+
+    @Synchronized
+    fun render(index: Int, maxWidth: Int): Bitmap {
+        val page = renderer.openPage(index.coerceIn(0, renderer.pageCount - 1))
+        try {
+            val width = maxWidth.coerceIn(320, 1800)
+            val height = (width.toFloat() * page.height / page.width.coerceAtLeast(1)).toInt().coerceAtLeast(1)
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+            return bitmap
+        } finally {
+            page.close()
+        }
+    }
+
+    override fun close() {
+        renderer.close()
+        descriptor.close()
     }
 }

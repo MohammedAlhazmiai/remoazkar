@@ -42,6 +42,14 @@ data class PreferencesSnapshot(
     val khatmahActive: Boolean = false
 )
 
+data class TasbeehState(
+    val count: Int = 0,
+    val target: Int = 33,
+    val zikrIndex: Int = 0,
+    val cyclesCompleted: Int = 0,
+    val vibrationEnabled: Boolean = true
+)
+
 /**
  * معالج تلف ملف التفضيلات.
  *
@@ -92,6 +100,11 @@ class PreferencesManager(private val context: Context) {
         val AUTO_REMINDERS_KEY = booleanPreferencesKey("auto_reminders")
         val REMINDER_INTERVAL_KEY = intPreferencesKey("reminder_interval")
         val TASBEEH_TOTAL_KEY = intPreferencesKey("tasbeeh_total")
+        val TASBEEH_COUNT_KEY = intPreferencesKey("tasbeeh_current_count")
+        val TASBEEH_TARGET_KEY = intPreferencesKey("tasbeeh_target")
+        val TASBEEH_ZIKR_KEY = intPreferencesKey("tasbeeh_zikr_index")
+        val TASBEEH_CYCLES_KEY = intPreferencesKey("tasbeeh_cycles")
+        val TASBEEH_VIBRATION_KEY = booleanPreferencesKey("tasbeeh_vibration")
         val SPEECH_RATE_KEY = floatPreferencesKey("speech_rate")
         val SPEECH_PITCH_KEY = floatPreferencesKey("speech_pitch")
         val NOTIFICATION_SOUND_KEY = booleanPreferencesKey("notification_sound")
@@ -201,6 +214,16 @@ class PreferencesManager(private val context: Context) {
 
     val tasbeehTotalFlow: Flow<Int> = context.dataStore.safeData
         .map { preferences -> preferences[TASBEEH_TOTAL_KEY] ?: 0 }
+
+    val tasbeehStateFlow: Flow<TasbeehState> = context.dataStore.safeData.map { preferences ->
+        TasbeehState(
+            count = preferences[TASBEEH_COUNT_KEY] ?: 0,
+            target = preferences[TASBEEH_TARGET_KEY] ?: 33,
+            zikrIndex = preferences[TASBEEH_ZIKR_KEY] ?: 0,
+            cyclesCompleted = preferences[TASBEEH_CYCLES_KEY] ?: 0,
+            vibrationEnabled = preferences[TASBEEH_VIBRATION_KEY] ?: true
+        )
+    }
 
     val speechRateFlow: Flow<Float> = context.dataStore.safeData
         .map { preferences -> preferences[SPEECH_RATE_KEY] ?: 1.0f }
@@ -321,6 +344,16 @@ class PreferencesManager(private val context: Context) {
     suspend fun saveTasbeehTotal(total: Int) {
         context.dataStore.edit { preferences ->
             preferences[TASBEEH_TOTAL_KEY] = total
+        }
+    }
+
+    suspend fun saveTasbeehState(state: TasbeehState) {
+        context.dataStore.edit { preferences ->
+            preferences[TASBEEH_COUNT_KEY] = state.count.coerceAtLeast(0)
+            preferences[TASBEEH_TARGET_KEY] = state.target.coerceIn(1, 10000)
+            preferences[TASBEEH_ZIKR_KEY] = state.zikrIndex.coerceIn(0, 100)
+            preferences[TASBEEH_CYCLES_KEY] = state.cyclesCompleted.coerceAtLeast(0)
+            preferences[TASBEEH_VIBRATION_KEY] = state.vibrationEnabled
         }
     }
 
