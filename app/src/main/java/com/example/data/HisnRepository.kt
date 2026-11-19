@@ -1,6 +1,7 @@
 package com.example.data
 
 import android.content.Context
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -40,37 +41,47 @@ object HisnRepository {
     @Synchronized
     fun ensureLoaded(context: Context) {
         if (loaded) return
-        val json = context.assets.open("hisn.json").bufferedReader().use { it.readText() }
-        val root = JSONObject(json)
-        val arr = root.optJSONArray("chapters") ?: return
-        chapters.clear()
-        index.clear()
-        for (i in 0 until arr.length()) {
-            val ch = arr.getJSONObject(i)
-            val itemsArr = ch.optJSONArray("items")
-            val items = ArrayList<HisnItem>(itemsArr?.length() ?: 0)
-            if (itemsArr != null) {
-                for (j in 0 until itemsArr.length()) {
-                    val it0 = itemsArr.getJSONObject(j)
-                    items.add(
-                        HisnItem(
-                            text = it0.optString("t"),
-                            footnote = it0.optString("f"),
-                            repeat = it0.optInt("r", 1).coerceAtLeast(1)
+        try {
+            val json = context.assets.open("hisn.json").bufferedReader().use { it.readText() }
+            val root = JSONObject(json)
+            val arr = root.optJSONArray("chapters")
+                ?: throw IllegalStateException("Missing 'chapters' in bundled hisn.json")
+            chapters.clear()
+            index.clear()
+            for (i in 0 until arr.length()) {
+                val ch = arr.getJSONObject(i)
+                val itemsArr = ch.optJSONArray("items")
+                val items = ArrayList<HisnItem>(itemsArr?.length() ?: 0)
+                if (itemsArr != null) {
+                    for (j in 0 until itemsArr.length()) {
+                        val it0 = itemsArr.getJSONObject(j)
+                        items.add(
+                            HisnItem(
+                                text = it0.optString("t"),
+                                footnote = it0.optString("f"),
+                                repeat = it0.optInt("r", 1).coerceAtLeast(1)
+                            )
                         )
-                    )
+                    }
                 }
+                val chapter = HisnChapter(
+                    id = ch.optInt("id", i + 1),
+                    title = ch.optString("title"),
+                    items = items
+                )
+                chapters.add(chapter)
+                index[chapter.id] = chapter
             }
-            val chapter = HisnChapter(
-                id = ch.optInt("id", i + 1),
-                title = ch.optString("title"),
-                items = items
-            )
-            chapters.add(chapter)
-            index[chapter.id] = chapter
+            loaded = true
+            isLoaded = true
+        } catch (error: Exception) {
+            // إفراغ أي نتيجة جزئية والسماح ببقاء التطبيق قابلاً للفتح.
+            chapters.clear()
+            index.clear()
+            loaded = true
+            isLoaded = true
+            Log.e("HisnRepository", "Unable to load bundled Hisn data", error)
         }
-        loaded = true
-        isLoaded = true
     }
 
     fun chapter(id: Int): HisnChapter? = index[id]

@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import android.content.Context
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -125,10 +126,17 @@ object SmartReaderBus {
     /** يُحمَّل السجل عند بدء التطبيق. */
     fun load(context: Context) {
         if (history.isNotEmpty()) return
-        val sp = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val saved = sp.getStringSet(KEY_HISTORY, emptySet()).orEmpty()
-        history.clear()
-        history.addAll(saved)
+        try {
+            val sp = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            val saved = sp.getStringSet(KEY_HISTORY, emptySet()).orEmpty()
+            history.clear()
+            history.addAll(saved)
+        } catch (error: Exception) {
+            // السجل ميزة اختيارية؛ بيانات قديمة أو من نوع غير متوقع لا يجوز أن
+            // تمنع إطلاق التطبيق.
+            history.clear()
+            Log.w("SmartReaderBus", "Ignoring unreadable smart-reader history", error)
+        }
     }
 }
 

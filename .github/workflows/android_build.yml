@@ -3,8 +3,6 @@ name: Build Android Release APK
 on:
   push:
     branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
@@ -24,21 +22,25 @@ jobs:
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
 
-    - name: Decode Keystore
+    - name: Decode release keystore from GitHub Secrets
       env:
         KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        KEYSTORE_PATH: ${{ runner.temp }}/my-upload-key.jks
       run: |
-        if [ -n "$KEYSTORE_BASE64" ]; then
-          echo "$KEYSTORE_BASE64" | base64 --decode > my-upload-key.jks
-        elif [ -f "keystore_base64.txt" ]; then
-          base64 --decode keystore_base64.txt > my-upload-key.jks
-        fi
+        set -euo pipefail
+        : "${KEYSTORE_BASE64:?Required GitHub Actions secret KEYSTORE_BASE64 is missing}"
+        : "${STORE_PASSWORD:?Required GitHub Actions secret STORE_PASSWORD is missing}"
+        : "${KEY_PASSWORD:?Required GitHub Actions secret KEY_PASSWORD is missing}"
+        printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+        chmod 600 "$KEYSTORE_PATH"
 
     - name: Build Release APK with Gradle
       env:
-        STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'android' }}
-        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'android' }}
-        KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
+        STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        KEYSTORE_PATH: ${{ runner.temp }}/my-upload-key.jks
       run: |
         chmod +x gradlew
         ./gradlew assembleRelease --stacktrace

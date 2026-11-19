@@ -91,16 +91,26 @@ class MainActivity : ComponentActivity() {
         preferencesManager = PreferencesManager(applicationContext)
 
         // --- تهيئة المحرّكات الأساسية مرة واحدة فقط ---
-        TtsManager.init(applicationContext)
-        NotificationHelper.createChannels(applicationContext)
-        ReminderScheduler.scheduleAll(applicationContext)
-        ReminderScheduler.scheduleDailyFeatures(applicationContext)
-        SmartReaderBus.load(applicationContext)
+        // هذه الميزات مساعدة وليست شرطًا لعرض التطبيق؛ فشل إحداها لا ينبغي أن
+        // يمنع إنشاء واجهة Compose أو يترك المستخدم أمام شاشة إغلاق التطبيق.
+        runStartupStep("TTS initialization") { TtsManager.init(applicationContext) }
+        runStartupStep("notification channels") {
+            NotificationHelper.createChannels(applicationContext)
+        }
+        // scheduleAll يتضمن أيضًا جدولة ميزات الكهف والملك.
+        runStartupStep("reminder scheduling") {
+            ReminderScheduler.scheduleAll(applicationContext)
+        }
+        runStartupStep("smart reader history") { SmartReaderBus.load(applicationContext) }
 
         // تحميل بيانات القرآن وحصن المسلم في الذاكرة (خارج الخيط الرئيسي)
         lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            QuranRepository.ensureLoaded(applicationContext)
-            HisnRepository.ensureLoaded(applicationContext)
+            runStartupStep("Quran asset loading") {
+                QuranRepository.ensureLoaded(applicationContext)
+            }
+            runStartupStep("Hisn asset loading") {
+                HisnRepository.ensureLoaded(applicationContext)
+            }
         }
 
         // طلب إذن الإشعارات على أندرويد 13+
@@ -133,23 +143,39 @@ class MainActivity : ComponentActivity() {
 
             // مزامنة إشعارات الأذكار التلقائية (WorkManager + منبّه يومي بوقت يدوي)
             LaunchedEffect(autoReminders, reminderInterval, azkarTime) {
-                AthkarReminderScheduler.sync(
-                    this@MainActivity,
-                    autoReminders,
-                    reminderInterval,
-                    azkarTime.first,
-                    azkarTime.second
-                )
+                try {
+                    AthkarReminderScheduler.sync(
+                        this@MainActivity,
+                        autoReminders,
+                        reminderInterval,
+                        azkarTime.first,
+                        azkarTime.second
+                    )
+                } catch (error: Exception) {
+                    android.util.Log.e(
+                        "RemoAzkarStartup",
+                        "Reminder synchronization failed; continuing without reminders",
+                        error
+                    )
+                }
             }
 
             // مزامنة إعدادات الصوت مع محرّك القراءة
             LaunchedEffect(speechRate, speechPitch) {
-                TtsManager.setParams(speechRate, speechPitch)
+                try {
+                    TtsManager.setParams(speechRate, speechPitch)
+                } catch (error: Exception) {
+                    android.util.Log.e("RemoAzkarStartup", "Unable to apply TTS settings", error)
+                }
             }
 
             // مزامنة إعداد صوت الإشعارات مع المرآة المتزامنة
             LaunchedEffect(notificationSound) {
-                PreferencesManager.mirrorNotificationSound(this@MainActivity, notificationSound)
+                try {
+                    PreferencesManager.mirrorNotificationSound(this@MainActivity, notificationSound)
+                } catch (error: Exception) {
+                    android.util.Log.e("RemoAzkarStartup", "Unable to mirror notification setting", error)
+                }
             }
 
             CompositionLocalProvider(
@@ -186,6 +212,18 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         TtsManager.stop()
+    }
+
+    private fun runStartupStep(name: String, action: () -> Unit) {
+        try {
+            action()
+        } catch (error: Exception) {
+            android.util.Log.e(
+                "RemoAzkarStartup",
+                "Startup step '$name' failed; continuing without it",
+                error
+            )
+        }
     }
 }
 

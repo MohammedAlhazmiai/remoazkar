@@ -58,6 +58,7 @@
 التوقيع يُقرأ من متغيّرات البيئة: `KEYSTORE_PATH`, `STORE_PASSWORD`, `KEY_PASSWORD` (alias: `upload`).
 
 يوجد Workflow في `.github/workflows/` باسم **Build Android Release APK** يفكّ ترميز `KEYSTORE_BASE64` من أسرار المستودع ويبني APK موقّعًا ويرفعه كـ artifact باسم `release-apk`.
+يتطلب الـWorkflow الأسرار `KEYSTORE_BASE64`, `STORE_PASSWORD`, و`KEY_PASSWORD`؛ لا تحفظ ملفات `.jks` أو نسخ Base64 لمفاتيح التوقيع داخل المستودع.
 
 ---
 

@@ -1,6 +1,7 @@
 package com.example.data
 
 import android.content.Context
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -47,44 +48,54 @@ object QuranRepository {
     @Synchronized
     fun ensureLoaded(context: Context) {
         if (loaded) return
-        val raw = context.assets.open("quran.json").bufferedReader().use { it.readText() }
-        val root = JSONObject(raw)
+        try {
+            val raw = context.assets.open("quran.json").bufferedReader().use { it.readText() }
+            val root = JSONObject(raw)
 
-        val sArr = root.getJSONArray("surahs")
-        for (i in 0 until sArr.length()) {
-            val o = sArr.getJSONObject(i)
-            surahs.add(
-                SurahInfo(
-                    number = o.getInt("number"),
-                    name = o.getString("name"),
-                    englishName = o.getString("englishName"),
-                    revelationType = o.getString("revelationType"),
-                    ayahCount = o.getInt("ayahCount"),
-                    pageStart = o.getInt("pageStart")
+            val sArr = root.getJSONArray("surahs")
+            for (i in 0 until sArr.length()) {
+                val o = sArr.getJSONObject(i)
+                surahs.add(
+                    SurahInfo(
+                        number = o.getInt("number"),
+                        name = o.getString("name"),
+                        englishName = o.getString("englishName"),
+                        revelationType = o.getString("revelationType"),
+                        ayahCount = o.getInt("ayahCount"),
+                        pageStart = o.getInt("pageStart")
+                    )
                 )
-            )
-        }
+            }
 
-        val aArr = root.getJSONArray("ayahs")
-        val grouped = HashMap<Int, MutableList<Ayah>>()
-        for (i in 0 until aArr.length()) {
-            val o = aArr.getJSONObject(i)
-            val s = o.getInt("s")
-            val ayah = Ayah(
-                surah = s,
-                number = o.getInt("n"),
-                text = o.getString("t").replace("\uFEFF", "").trim(),
-                juz = o.getInt("j"),
-                page = o.getInt("p"),
-                hizb = o.getInt("h"),
-                plain = normalize(o.optString("x", o.getString("t")))
-            )
-            ayahs.add(ayah)
-            grouped.getOrPut(s) { mutableListOf() }.add(ayah)
+            val aArr = root.getJSONArray("ayahs")
+            val grouped = HashMap<Int, MutableList<Ayah>>()
+            for (i in 0 until aArr.length()) {
+                val o = aArr.getJSONObject(i)
+                val s = o.getInt("s")
+                val ayah = Ayah(
+                    surah = s,
+                    number = o.getInt("n"),
+                    text = o.getString("t").replace("\uFEFF", "").trim(),
+                    juz = o.getInt("j"),
+                    page = o.getInt("p"),
+                    hizb = o.getInt("h"),
+                    plain = normalize(o.optString("x", o.getString("t")))
+                )
+                ayahs.add(ayah)
+                grouped.getOrPut(s) { mutableListOf() }.add(ayah)
+            }
+            grouped.forEach { (k, v) -> surahIndex[k] = v }
+            loaded = true
+            isLoaded = true
+        } catch (error: Exception) {
+            // لا نترك قوائم جزئية ولا نسمح لخطأ قراءة أصل محلي بإنهاء العملية.
+            surahs.clear()
+            ayahs.clear()
+            surahIndex.clear()
+            loaded = true
+            isLoaded = true
+            Log.e("QuranRepository", "Unable to load bundled Quran data", error)
         }
-        grouped.forEach { (k, v) -> surahIndex[k] = v }
-        loaded = true
-        isLoaded = true
     }
 
     fun normalize(input: String): String {
