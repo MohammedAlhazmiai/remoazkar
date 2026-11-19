@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.PreferencesManager
+import com.example.data.TasbeehState
 import com.example.data.TtsManager
 import kotlinx.coroutines.launch
 
@@ -46,11 +47,32 @@ fun TasbeehScreen(
     val prefs = remember { PreferencesManager(context) }
     val scope = rememberCoroutineScope()
     val savedTotal by prefs.tasbeehTotalFlow.collectAsState(initial = -1)
+    val savedState by prefs.tasbeehStateFlow.collectAsState(initial = null as TasbeehState?)
     var restored by remember { mutableStateOf(false) }
+    var stateRestored by remember { mutableStateOf(false) }
     LaunchedEffect(savedTotal) {
         if (!restored && savedTotal >= 0) {
             totalCount = savedTotal
             restored = true
+        }
+    }
+    LaunchedEffect(savedState) {
+        val state = savedState
+        if (!stateRestored && state != null) {
+            count = state.count
+            targetCount = state.target
+            selectedZikrIndex = state.zikrIndex.coerceIn(0, 5)
+            cyclesCompleted = state.cyclesCompleted
+            vibrationEnabled = state.vibrationEnabled
+            stateRestored = true
+        }
+    }
+
+    fun persistState() {
+        scope.launch {
+            prefs.saveTasbeehState(
+                TasbeehState(count, targetCount, selectedZikrIndex, cyclesCompleted, vibrationEnabled)
+            )
         }
     }
 
@@ -99,7 +121,7 @@ fun TasbeehScreen(
                 },
                 actions = {
                     IconButton(
-                        onClick = { vibrationEnabled = !vibrationEnabled },
+                        onClick = { vibrationEnabled = !vibrationEnabled; persistState() },
                         modifier = Modifier.testTag("vibration_toggle")
                     ) {
                         Icon(
@@ -111,6 +133,7 @@ fun TasbeehScreen(
                     IconButton(
                         onClick = {
                             count = 0
+                            persistState()
                         },
                         modifier = Modifier.testTag("reset_button")
                     ) {
@@ -142,6 +165,7 @@ fun TasbeehScreen(
                         onClick = {
                             selectedZikrIndex = index
                             count = 0
+                            persistState()
                         },
                         label = { Text(zikr, fontSize = 12.sp) },
                         modifier = Modifier.testTag("chip_$index")
@@ -231,6 +255,7 @@ fun TasbeehScreen(
                                 cyclesCompleted++
                                 count = 0
                             }
+                            persistState()
                         }
                         .testTag("tasbeeh_click_area"),
                     contentAlignment = Alignment.Center
@@ -272,6 +297,7 @@ fun TasbeehScreen(
                             onClick = {
                                 targetCount = target
                                 count = 0
+                                persistState()
                             },
                             colors = ButtonDefaults.outlinedButtonColors(
                                 containerColor = if (targetCount == target) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent
