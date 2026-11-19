@@ -54,7 +54,10 @@ fun HomeScreen(
     onSearchClick: () -> Unit,
     onFavoritesClick: () -> Unit,
     onChapterClick: (Int) -> Unit,
-    onMenuClick: () -> Unit = {}
+    onMenuClick: () -> Unit = {},
+    onKhatmahClick: () -> Unit = {},
+    onNamesOfAllahClick: () -> Unit = {},
+    onProphetDuasClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val hijri = remember { HijriCalendar.today() }
@@ -177,6 +180,22 @@ fun HomeScreen(
                         FeatureCard(
                             "الأدعية والأربعون النبوية", "80 دعاءً مأثورًا", Icons.Default.MenuBook,
                             Modifier.weight(1f), onAdiyaClick
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FeatureCard(
+                            "خطة ختم القرآن", "604 صفحة ÷ المدة", Icons.Default.EventAvailable,
+                            Modifier.weight(1f), onKhatmahClick
+                        )
+                        FeatureCard(
+                            "أسماء الله الحسنى", "99 اسمًا بمعانيها", Icons.Default.AutoAwesome,
+                            Modifier.weight(1f), onNamesOfAllahClick
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FeatureCard(
+                            "أدعية الأنبياء", "25 دعاءً قرآنيًا", Icons.Default.Book,
+                            Modifier.weight(1f), onProphetDuasClick
                         )
                     }
                 }

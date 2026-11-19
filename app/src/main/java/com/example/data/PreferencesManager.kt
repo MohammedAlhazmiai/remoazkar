@@ -2,12 +2,38 @@ package com.example.data
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import java.io.IOException
 
-val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "rim_athkar_preferences")
+/**
+ * معالج تلف ملف التفضيلات.
+ *
+ * سبب انهيار التطبيق عند الإقلاع: ملف DataStore التالف (الذي يُستعاد من النسخ
+ * الاحتياطي لأندرويد عند إعادة التثبيت) كان يرمي CorruptionException أثناء أول
+ * قراءة، فيقتل التطبيق قبل ظهور شاشة الدخول. هذا المعالج يستبدل الملف التالف
+ * بملف فارغ سليم بدل الانهيار.
+ */
+private val preferencesCorruptionHandler =
+    ReplaceFileCorruptionHandler<Preferences> { emptyPreferences() }
+
+val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
+    name = "rim_athkar_preferences",
+    corruptionHandler = preferencesCorruptionHandler
+)
+
+/**
+ * قراءة آمنة: أي خطأ إدخال/إخراج (ملف تالف، قرص ممتلئ، صلاحيات) يُرجع تفضيلات
+ * فارغة بدل إسقاط التطبيق.
+ */
+private val DataStore<Preferences>.safeData: Flow<Preferences>
+    get() = data.catch { throwable ->
+        if (throwable is IOException) emit(emptyPreferences()) else throw throwable
+    }
 
 class PreferencesManager(private val context: Context) {
     companion object {
@@ -25,6 +51,12 @@ class PreferencesManager(private val context: Context) {
         val LANGUAGE_KEY = stringPreferencesKey("app_language")
         val FONT_FAMILY_KEY = intPreferencesKey("font_family_index")
         val TASHKEEL_KEY = booleanPreferencesKey("tashkeel_enabled")
+
+        // --- خطة ختم القرآن ---
+        val KHATMAH_DAYS_KEY = intPreferencesKey("khatmah_days")
+        val KHATMAH_START_KEY = longPreferencesKey("khatmah_start_millis")
+        val KHATMAH_PAGES_DONE_KEY = intPreferencesKey("khatmah_pages_done")
+        val KHATMAH_ACTIVE_KEY = booleanPreferencesKey("khatmah_active")
 
         /** ملف SharedPreferences مرآة للقراءة المتزامنة من مستقبِل الإشعارات. */
         private const val MIRROR_FILE = "rim_mirror"
@@ -82,49 +114,84 @@ class PreferencesManager(private val context: Context) {
         }
     }
 
-    val darkModeFlow: Flow<Boolean> = context.dataStore.data
+    val darkModeFlow: Flow<Boolean> = context.dataStore.safeData
         .map { preferences -> preferences[DARK_MODE_KEY] ?: false }
 
-    val favoritesFlow: Flow<Set<String>> = context.dataStore.data
+    val favoritesFlow: Flow<Set<String>> = context.dataStore.safeData
         .map { preferences -> preferences[FAVORITES_KEY] ?: emptySet() }
 
-    val autoRemindersFlow: Flow<Boolean> = context.dataStore.data
+    val autoRemindersFlow: Flow<Boolean> = context.dataStore.safeData
         .map { preferences -> preferences[AUTO_REMINDERS_KEY] ?: true }
 
-    val reminderIntervalFlow: Flow<Int> = context.dataStore.data
+    val reminderIntervalFlow: Flow<Int> = context.dataStore.safeData
         .map { preferences -> preferences[REMINDER_INTERVAL_KEY] ?: 60 }
 
-    val tasbeehTotalFlow: Flow<Int> = context.dataStore.data
+    val tasbeehTotalFlow: Flow<Int> = context.dataStore.safeData
         .map { preferences -> preferences[TASBEEH_TOTAL_KEY] ?: 0 }
 
-    val speechRateFlow: Flow<Float> = context.dataStore.data
+    val speechRateFlow: Flow<Float> = context.dataStore.safeData
         .map { preferences -> preferences[SPEECH_RATE_KEY] ?: 1.0f }
 
-    val speechPitchFlow: Flow<Float> = context.dataStore.data
+    val speechPitchFlow: Flow<Float> = context.dataStore.safeData
         .map { preferences -> preferences[SPEECH_PITCH_KEY] ?: 1.0f }
 
-    val notificationSoundFlow: Flow<Boolean> = context.dataStore.data
+    val notificationSoundFlow: Flow<Boolean> = context.dataStore.safeData
         .map { preferences -> preferences[NOTIFICATION_SOUND_KEY] ?: true }
 
-    val fontSizeFlow: Flow<Int> = context.dataStore.data
+    val fontSizeFlow: Flow<Int> = context.dataStore.safeData
         .map { preferences -> preferences[FONT_SIZE_KEY] ?: 1 } // 0: Small, 1: Medium, 2: Large
 
     /** وقت تشغيل إشعارات الأذكار اليومية (ساعة، دقيقة). */
-    val azkarTimeFlow: Flow<Pair<Int, Int>> = context.dataStore.data
+    val azkarTimeFlow: Flow<Pair<Int, Int>> = context.dataStore.safeData
         .map { preferences ->
             val hour = preferences[AZKAR_TIME_HOUR_KEY] ?: 6
             val minute = preferences[AZKAR_TIME_MINUTE_KEY] ?: 30
             hour to minute
         }
 
-    val languageFlow: Flow<String> = context.dataStore.data
+    val languageFlow: Flow<String> = context.dataStore.safeData
         .map { preferences -> preferences[LANGUAGE_KEY] ?: AppLocale.ARABIC }
 
-    val fontFamilyFlow: Flow<Int> = context.dataStore.data
+    val fontFamilyFlow: Flow<Int> = context.dataStore.safeData
         .map { preferences -> preferences[FONT_FAMILY_KEY] ?: 0 }
 
-    val tashkeelFlow: Flow<Boolean> = context.dataStore.data
+    val tashkeelFlow: Flow<Boolean> = context.dataStore.safeData
         .map { preferences -> preferences[TASHKEEL_KEY] ?: true }
+
+    // --- خطة ختم القرآن ---
+    val khatmahDaysFlow: Flow<Int> = context.dataStore.safeData
+        .map { preferences -> preferences[KHATMAH_DAYS_KEY] ?: 30 }
+
+    val khatmahStartFlow: Flow<Long> = context.dataStore.safeData
+        .map { preferences -> preferences[KHATMAH_START_KEY] ?: 0L }
+
+    val khatmahPagesDoneFlow: Flow<Int> = context.dataStore.safeData
+        .map { preferences -> preferences[KHATMAH_PAGES_DONE_KEY] ?: 0 }
+
+    val khatmahActiveFlow: Flow<Boolean> = context.dataStore.safeData
+        .map { preferences -> preferences[KHATMAH_ACTIVE_KEY] ?: false }
+
+    suspend fun startKhatmah(days: Int, startMillis: Long) {
+        context.dataStore.edit { preferences ->
+            preferences[KHATMAH_DAYS_KEY] = days
+            preferences[KHATMAH_START_KEY] = startMillis
+            preferences[KHATMAH_PAGES_DONE_KEY] = 0
+            preferences[KHATMAH_ACTIVE_KEY] = true
+        }
+    }
+
+    suspend fun setKhatmahPagesDone(pages: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[KHATMAH_PAGES_DONE_KEY] = pages.coerceIn(0, 604)
+        }
+    }
+
+    suspend fun stopKhatmah() {
+        context.dataStore.edit { preferences ->
+            preferences[KHATMAH_ACTIVE_KEY] = false
+            preferences[KHATMAH_PAGES_DONE_KEY] = 0
+        }
+    }
 
     suspend fun setLanguage(code: String) {
         context.dataStore.edit { preferences ->

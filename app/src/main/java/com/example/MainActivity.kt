@@ -58,6 +58,9 @@ import com.example.ui.screens.FavoritesScreen
 import com.example.ui.screens.HijriScreen
 import com.example.ui.screens.HisnChapterScreen
 import com.example.ui.screens.HisnScreen
+import com.example.ui.screens.KhatmahScreen
+import com.example.ui.screens.NamesOfAllahScreen
+import com.example.ui.screens.ProphetDuasScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.QuranReaderScreen
 import com.example.ui.screens.QuranScreen
@@ -123,6 +126,10 @@ class MainActivity : ComponentActivity() {
             val language by preferencesManager.languageFlow.collectAsState(initial = AppLocale.ARABIC)
             val fontFamilyIndex by preferencesManager.fontFamilyFlow.collectAsState(initial = 0)
             val tashkeel by preferencesManager.tashkeelFlow.collectAsState(initial = true)
+            val khatmahDays by preferencesManager.khatmahDaysFlow.collectAsState(initial = 30)
+            val khatmahStart by preferencesManager.khatmahStartFlow.collectAsState(initial = 0L)
+            val khatmahPagesDone by preferencesManager.khatmahPagesDoneFlow.collectAsState(initial = 0)
+            val khatmahActive by preferencesManager.khatmahActiveFlow.collectAsState(initial = false)
 
             // مزامنة إشعارات الأذكار التلقائية (WorkManager + منبّه يومي بوقت يدوي)
             LaunchedEffect(autoReminders, reminderInterval, azkarTime) {
@@ -165,7 +172,11 @@ class MainActivity : ComponentActivity() {
                         fontSizeIndex = fontSizeIndex,
                         language = language,
                         fontFamilyIndex = fontFamilyIndex,
-                        tashkeel = tashkeel
+                        tashkeel = tashkeel,
+                        khatmahDays = khatmahDays,
+                        khatmahStart = khatmahStart,
+                        khatmahPagesDone = khatmahPagesDone,
+                        khatmahActive = khatmahActive
                     )
                 }
             }
@@ -189,7 +200,11 @@ private fun AppRoot(
     fontSizeIndex: Int,
     language: String,
     fontFamilyIndex: Int,
-    tashkeel: Boolean
+    tashkeel: Boolean,
+    khatmahDays: Int,
+    khatmahStart: Long,
+    khatmahPagesDone: Int,
+    khatmahActive: Boolean
 ) {
     val context = LocalContext.current
     val navController = rememberNavController()
@@ -261,8 +276,44 @@ private fun AppRoot(
                         onSearchClick = { navController.navigate("search") },
                         onFavoritesClick = { navController.navigate("favorites") },
                         onChapterClick = { chapterId -> navController.navigate("hisn_chapter/$chapterId") },
-                        onMenuClick = { scope.launch { drawerState.open() } }
+                        onMenuClick = { scope.launch { drawerState.open() } },
+                        onKhatmahClick = { navController.navigate("khatmah") },
+                        onNamesOfAllahClick = { navController.navigate("names_of_allah") },
+                        onProphetDuasClick = { navController.navigate("prophet_duas") }
                     )
+                }
+
+                // ---------- الصفحات الدينية الجديدة ----------
+                composable("khatmah") {
+                    KhatmahScreen(
+                        days = khatmahDays,
+                        startMillis = khatmahStart,
+                        pagesDone = khatmahPagesDone,
+                        active = khatmahActive,
+                        onStart = { days ->
+                            scope.launch {
+                                preferencesManager.startKhatmah(
+                                    days = days,
+                                    startMillis = System.currentTimeMillis()
+                                )
+                            }
+                        },
+                        onPagesDoneChange = { pages ->
+                            scope.launch {
+                                preferencesManager.setKhatmahPagesDone(pages)
+                            }
+                        },
+                        onStop = {
+                            scope.launch { preferencesManager.stopKhatmah() }
+                        },
+                        onBackClick = { navController.popBackStack() }
+                    )
+                }
+                composable("names_of_allah") {
+                    NamesOfAllahScreen(onBackClick = { navController.popBackStack() })
+                }
+                composable("prophet_duas") {
+                    ProphetDuasScreen(onBackClick = { navController.popBackStack() })
                 }
 
                 composable("quran") {
