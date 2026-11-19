@@ -1,14 +1,46 @@
 package com.example.data
 
 import android.content.Context
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
-import androidx.datastore.preferences.core.*
+import androidx.datastore.preferences.core.MutablePreferences
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.edit as dataStoreEdit
+import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import java.io.IOException
+
+private const val PREFERENCES_LOG_TAG = "PreferencesManager"
+
+data class PreferencesSnapshot(
+    val darkMode: Boolean = false,
+    val favorites: Set<String> = emptySet(),
+    val autoReminders: Boolean = true,
+    val reminderInterval: Int = 60,
+    val tasbeehTotal: Int = 0,
+    val speechRate: Float = 1.0f,
+    val speechPitch: Float = 1.0f,
+    val notificationSound: Boolean = true,
+    val fontSizeIndex: Int = 1,
+    val azkarTime: Pair<Int, Int> = 6 to 30,
+    val language: String = AppLocale.ARABIC,
+    val fontFamilyIndex: Int = 0,
+    val tashkeel: Boolean = true,
+    val khatmahDays: Int = 30,
+    val khatmahStart: Long = 0L,
+    val khatmahPagesDone: Int = 0,
+    val khatmahActive: Boolean = false
+)
 
 /**
  * معالج تلف ملف التفضيلات.
@@ -32,8 +64,26 @@ val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
  */
 private val DataStore<Preferences>.safeData: Flow<Preferences>
     get() = data.catch { throwable ->
-        if (throwable is IOException) emit(emptyPreferences()) else throw throwable
+        if (throwable is IOException) {
+            Log.e(PREFERENCES_LOG_TAG, "Unable to read preferences; using defaults", throwable)
+            emit(emptyPreferences())
+        } else {
+            throw throwable
+        }
     }
+
+/** Catch expected storage failures so a failed preference write cannot crash the UI coroutine. */
+private suspend fun DataStore<Preferences>.edit(
+    transform: suspend (MutablePreferences) -> Unit
+): Boolean {
+    return try {
+        dataStoreEdit(transform)
+        true
+    } catch (error: IOException) {
+        Log.e(PREFERENCES_LOG_TAG, "Unable to persist preferences", error)
+        false
+    }
+}
 
 class PreferencesManager(private val context: Context) {
     companion object {
@@ -112,6 +162,29 @@ class PreferencesManager(private val context: Context) {
                 .putInt(MIRROR_AZKAR_MINUTE, minute)
                 .apply()
         }
+    }
+
+    val snapshotFlow: Flow<PreferencesSnapshot> = context.dataStore.safeData.map { preferences ->
+        PreferencesSnapshot(
+            darkMode = preferences[DARK_MODE_KEY] ?: false,
+            favorites = preferences[FAVORITES_KEY] ?: emptySet(),
+            autoReminders = preferences[AUTO_REMINDERS_KEY] ?: true,
+            reminderInterval = preferences[REMINDER_INTERVAL_KEY] ?: 60,
+            tasbeehTotal = preferences[TASBEEH_TOTAL_KEY] ?: 0,
+            speechRate = preferences[SPEECH_RATE_KEY] ?: 1.0f,
+            speechPitch = preferences[SPEECH_PITCH_KEY] ?: 1.0f,
+            notificationSound = preferences[NOTIFICATION_SOUND_KEY] ?: true,
+            fontSizeIndex = preferences[FONT_SIZE_KEY] ?: 1,
+            azkarTime = (preferences[AZKAR_TIME_HOUR_KEY] ?: 6) to
+                (preferences[AZKAR_TIME_MINUTE_KEY] ?: 30),
+            language = preferences[LANGUAGE_KEY] ?: AppLocale.ARABIC,
+            fontFamilyIndex = preferences[FONT_FAMILY_KEY] ?: 0,
+            tashkeel = preferences[TASHKEEL_KEY] ?: true,
+            khatmahDays = preferences[KHATMAH_DAYS_KEY] ?: 30,
+            khatmahStart = preferences[KHATMAH_START_KEY] ?: 0L,
+            khatmahPagesDone = preferences[KHATMAH_PAGES_DONE_KEY] ?: 0,
+            khatmahActive = preferences[KHATMAH_ACTIVE_KEY] ?: false
+        )
     }
 
     val darkModeFlow: Flow<Boolean> = context.dataStore.safeData
@@ -229,18 +302,18 @@ class PreferencesManager(private val context: Context) {
     }
 
     suspend fun setAutoReminders(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+        if (!context.dataStore.edit { preferences ->
             preferences[AUTO_REMINDERS_KEY] = enabled
-        }
+        }) return
         val interval = reminderInterval(context)
         val time = azkarTime(context)
         mirrorAzkarSettings(context, enabled, interval, time.first, time.second)
     }
 
     suspend fun setReminderInterval(minutes: Int) {
-        context.dataStore.edit { preferences ->
+        if (!context.dataStore.edit { preferences ->
             preferences[REMINDER_INTERVAL_KEY] = minutes
-        }
+        }) return
         val time = azkarTime(context)
         mirrorAzkarSettings(context, isAutoRemindersEnabled(context), minutes, time.first, time.second)
     }
@@ -264,9 +337,10 @@ class PreferencesManager(private val context: Context) {
     }
 
     suspend fun setNotificationSound(enabled: Boolean) {
-        mirrorNotificationSound(context, enabled)
-        context.dataStore.edit { preferences ->
+        if (context.dataStore.edit { preferences ->
             preferences[NOTIFICATION_SOUND_KEY] = enabled
+        }) {
+            mirrorNotificationSound(context, enabled)
         }
     }
 
@@ -279,10 +353,10 @@ class PreferencesManager(private val context: Context) {
     suspend fun setAzkarTime(hour: Int, minute: Int) {
         val h = hour.coerceIn(0, 23)
         val m = minute.coerceIn(0, 59)
-        context.dataStore.edit { preferences ->
+        if (!context.dataStore.edit { preferences ->
             preferences[AZKAR_TIME_HOUR_KEY] = h
             preferences[AZKAR_TIME_MINUTE_KEY] = m
-        }
+        }) return
         mirrorAzkarSettings(context, isAutoRemindersEnabled(context), reminderInterval(context), h, m)
     }
 }

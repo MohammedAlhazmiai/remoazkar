@@ -17,7 +17,6 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -26,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -40,6 +40,7 @@ import com.example.data.LocalAppStrings
 import com.example.data.LocalTashkeelEnabled
 import com.example.data.NotificationHelper
 import com.example.data.PreferencesManager
+import com.example.data.PreferencesSnapshot
 import com.example.data.QuranRepository
 import com.example.data.ReminderScheduler
 import com.example.data.TtsManager
@@ -124,22 +125,25 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            val darkMode by preferencesManager.darkModeFlow.collectAsState(initial = false)
-            val favorites by preferencesManager.favoritesFlow.collectAsState(initial = emptySet())
-            val speechRate by preferencesManager.speechRateFlow.collectAsState(initial = 1.0f)
-            val speechPitch by preferencesManager.speechPitchFlow.collectAsState(initial = 1.0f)
-            val notificationSound by preferencesManager.notificationSoundFlow.collectAsState(initial = true)
-            val fontSizeIndex by preferencesManager.fontSizeFlow.collectAsState(initial = 1)
-            val autoReminders by preferencesManager.autoRemindersFlow.collectAsState(initial = true)
-            val reminderInterval by preferencesManager.reminderIntervalFlow.collectAsState(initial = 60)
-            val azkarTime by preferencesManager.azkarTimeFlow.collectAsState(initial = 6 to 30)
-            val language by preferencesManager.languageFlow.collectAsState(initial = AppLocale.ARABIC)
-            val fontFamilyIndex by preferencesManager.fontFamilyFlow.collectAsState(initial = 0)
-            val tashkeel by preferencesManager.tashkeelFlow.collectAsState(initial = true)
-            val khatmahDays by preferencesManager.khatmahDaysFlow.collectAsState(initial = 30)
-            val khatmahStart by preferencesManager.khatmahStartFlow.collectAsState(initial = 0L)
-            val khatmahPagesDone by preferencesManager.khatmahPagesDoneFlow.collectAsState(initial = 0)
-            val khatmahActive by preferencesManager.khatmahActiveFlow.collectAsState(initial = false)
+            val preferences by preferencesManager.snapshotFlow.collectAsStateWithLifecycle(
+                initialValue = PreferencesSnapshot()
+            )
+            val darkMode = preferences.darkMode
+            val favorites = preferences.favorites
+            val speechRate = preferences.speechRate
+            val speechPitch = preferences.speechPitch
+            val notificationSound = preferences.notificationSound
+            val fontSizeIndex = preferences.fontSizeIndex
+            val autoReminders = preferences.autoReminders
+            val reminderInterval = preferences.reminderInterval
+            val azkarTime = preferences.azkarTime
+            val language = preferences.language
+            val fontFamilyIndex = preferences.fontFamilyIndex
+            val tashkeel = preferences.tashkeel
+            val khatmahDays = preferences.khatmahDays
+            val khatmahStart = preferences.khatmahStart
+            val khatmahPagesDone = preferences.khatmahPagesDone
+            val khatmahActive = preferences.khatmahActive
 
             // مزامنة إشعارات الأذكار التلقائية (WorkManager + منبّه يومي بوقت يدوي)
             LaunchedEffect(autoReminders, reminderInterval, azkarTime) {
