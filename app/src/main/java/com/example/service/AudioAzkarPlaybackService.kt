@@ -7,8 +7,10 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.media.AudioAttributes
+import android.media.MediaPlayer
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import androidx.core.app.NotificationCompat
@@ -22,6 +24,7 @@ class AudioAzkarPlaybackService : Service() {
     private var pendingTitle: String = "الأذكار الصوتية"
     private var speechChunks: List<String> = emptyList()
     private var chunkIndex = 0
+    private var mediaPlayer: MediaPlayer? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -33,16 +36,64 @@ class AudioAzkarPlaybackService : Service() {
             stopPlayback()
             return START_NOT_STICKY
         }
+        pendingTitle = intent?.getStringExtra(EXTRA_TITLE) ?: "الأذكار الصوتية"
+        val audioResourceName = intent?.getStringExtra(EXTRA_AUDIO_RESOURCE_NAME)?.trim().orEmpty()
+        if (audioResourceName.isNotBlank()) {
+            playHumanRecording(audioResourceName)
+            return START_NOT_STICKY
+        }
         val text = intent?.getStringExtra(EXTRA_TEXT)?.trim().orEmpty()
         if (text.isBlank()) {
             stopSelf(startId)
             return START_NOT_STICKY
         }
+        releaseMediaPlayer()
         pendingText = text
-        pendingTitle = intent?.getStringExtra(EXTRA_TITLE) ?: "الأذكار الصوتية"
         startForegroundCompat(buildNotification(pendingTitle, text.take(100)))
         if (tts == null) initializeTts() else if (ready) speakPending()
         return START_NOT_STICKY
+    }
+
+    private fun playHumanRecording(resourceName: String) {
+        tts?.stop()
+        releaseMediaPlayer()
+        startForegroundCompat(buildNotification(pendingTitle, "تشغيل تسجيل صوتي بشري"))
+
+        val resourceId = resources.getIdentifier(resourceName, "raw", packageName)
+        if (resourceId == 0) {
+            stopPlayback()
+            return
+        }
+
+        val player = MediaPlayer()
+        mediaPlayer = player
+        try {
+            player.setWakeMode(applicationContext, PowerManager.PARTIAL_WAKE_LOCK)
+            player.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build()
+            )
+            player.setOnPreparedListener { prepared ->
+                if (mediaPlayer === prepared) prepared.start()
+            }
+            player.setOnCompletionListener { stopPlayback() }
+            player.setOnErrorListener { _, _, _ ->
+                stopPlayback()
+                true
+            }
+            resources.openRawResourceFd(resourceId).use { descriptor ->
+                player.setDataSource(
+                    descriptor.fileDescriptor,
+                    descriptor.startOffset,
+                    descriptor.length
+                )
+            }
+            player.prepareAsync()
+        } catch (_: Exception) {
+            stopPlayback()
+        }
     }
 
     private fun initializeTts() {
@@ -61,15 +112,6 @@ class AudioAzkarPlaybackService : Service() {
                     return@TextToSpeech
                 }
             }
-            engine.voices
-                ?.filter { it.locale.language.equals("ar", ignoreCase = true) }
-                ?.sortedWith(
-                    compareBy<android.speech.tts.Voice> { it.isNetworkConnectionRequired }
-                        .thenByDescending { it.quality }
-                        .thenBy { it.latency }
-                )
-                ?.firstOrNull()
-                ?.let { engine.voice = it }
             engine.setSpeechRate(0.95f)
             engine.setPitch(1.0f)
             engine.setAudioAttributes(
@@ -143,6 +185,7 @@ class AudioAzkarPlaybackService : Service() {
             .setContentText(snippet)
             .setStyle(NotificationCompat.BigTextStyle().bigText(snippet))
             .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(openPending)
@@ -172,11 +215,25 @@ class AudioAzkarPlaybackService : Service() {
 
     private fun stopPlayback() {
         tts?.stop()
+        releaseMediaPlayer()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
+    private fun releaseMediaPlayer() {
+        val player = mediaPlayer ?: return
+        mediaPlayer = null
+        runCatching {
+            player.setOnPreparedListener(null)
+            player.setOnCompletionListener(null)
+            player.setOnErrorListener(null)
+            if (player.isPlaying) player.stop()
+            player.release()
+        }
+    }
+
     override fun onDestroy() {
+        releaseMediaPlayer()
         tts?.stop()
         tts?.shutdown()
         tts = null
@@ -190,6 +247,7 @@ class AudioAzkarPlaybackService : Service() {
         const val ACTION_STOP = "com.example.action.STOP_BACKGROUND_ATHKAR"
         const val EXTRA_TEXT = "com.example.extra.ATHKAR_TEXT"
         const val EXTRA_TITLE = "com.example.extra.ATHKAR_TITLE"
+        const val EXTRA_AUDIO_RESOURCE_NAME = "com.example.extra.HUMAN_AZKAR_AUDIO_RESOURCE"
         const val CHANNEL_ID = "rim_athkar_playback"
         const val NOTIFICATION_ID = 7041
     }

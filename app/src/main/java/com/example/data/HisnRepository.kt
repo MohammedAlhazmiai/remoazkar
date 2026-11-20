@@ -23,7 +23,7 @@ data class HisnChapter(
 }
 
 /**
- * كامل حصن المسلم: 132 بابًا و291 ذكرًا مع التكرارات والحواشي.
+ * حصن المسلم المستورد من المرجع: 133 بابًا و300 ذكر مع التكرارات والحواشي.
  * يُقرأ من assets/hisn.json عند أول استخدام.
  */
 object HisnRepository {
@@ -86,8 +86,10 @@ object HisnRepository {
 
     fun chapter(id: Int): HisnChapter? = index[id]
 
-    fun chapterByTitle(title: String): HisnChapter? =
-        chapters.firstOrNull { it.title.trim() == title.trim() }
+    fun chapterByTitle(title: String): HisnChapter? {
+        val wanted = normalize(title)
+        return chapters.firstOrNull { normalize(it.title) == wanted }
+    }
 
     fun normalize(input: String): String {
         var s = input.replace(DIACRITICS, "")
@@ -117,7 +119,8 @@ object HisnRepository {
     /** الأبواب المميزة التي تظهر في الرئيسية */
     fun featuredIds(): List<Int> {
         val wanted = listOf(
-            "أذكار الصباح والمساء",
+            "أذكار الصباح",
+            "أذكار المساء",
             "أذكار النوم",
             "أذكار الاستيقاظ من النوم",
             "الأذكار بعد السلام من الصلاة",
@@ -127,7 +130,7 @@ object HisnRepository {
         )
         val out = ArrayList<Int>()
         for (w in wanted) chapterByTitle(w)?.let { out.add(it.id) }
-        return out
+        return out.distinct()
     }
 
     fun totalItems(): Int = chapters.sumOf { it.items.size }

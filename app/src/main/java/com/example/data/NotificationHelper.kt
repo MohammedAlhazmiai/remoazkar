@@ -5,12 +5,14 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.example.MainActivity
+import com.example.R
 
 /**
  * إشعارات التذكير — تعمل من أندرويد 7 (API 24) حتى أحدث إصدار.
@@ -26,6 +28,8 @@ object NotificationHelper {
     const val CHANNEL_DAILY = "rim_daily"
     const val CHANNEL_REMINDERS_SILENT = "rim_reminders_silent"
     const val CHANNEL_DAILY_SILENT = "rim_daily_silent"
+    const val CHANNEL_HUMAN_AZKAR = "rim_human_azkar_v1"
+    const val CHANNEL_HUMAN_AZKAR_SILENT = "rim_human_azkar_silent"
 
     fun createChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -79,10 +83,38 @@ object NotificationHelper {
             enableVibration(false)
         }
 
+        val humanAzkarUri = Uri.parse("android.resource://${context.packageName}/${R.raw.human_azkar_01}")
+        val humanAzkar = NotificationChannel(
+            CHANNEL_HUMAN_AZKAR,
+            "التسجيلات البشرية للأذكار",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "صوت تسجيل بشري بديل عندما لا يتوفر إذن المنبه الدقيق"
+            setSound(
+                humanAzkarUri,
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build()
+            )
+            enableVibration(true)
+        }
+        val humanAzkarSilent = NotificationChannel(
+            CHANNEL_HUMAN_AZKAR_SILENT,
+            "التسجيلات البشرية للأذكار (صامتة)",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "تنبيهات التسجيلات البشرية بدون صوت أو اهتزاز"
+            setSound(null, null)
+            enableVibration(false)
+        }
+
         nm.createNotificationChannel(reminders)
         nm.createNotificationChannel(remindersSilent)
         nm.createNotificationChannel(daily)
         nm.createNotificationChannel(dailySilent)
+        nm.createNotificationChannel(humanAzkar)
+        nm.createNotificationChannel(humanAzkarSilent)
     }
 
     /** يختار القناة المناسبة حسب إعداد الصوت في التطبيق. */
@@ -139,5 +171,90 @@ object NotificationHelper {
         } catch (_: SecurityException) {
             // إذن الإشعارات غير ممنوح (أندرويد 13+)
         }
+    }
+
+    /** Uses a human-recorded resource as the notification sound when background playback is restricted. */
+    fun showHumanAzkarFallback(
+        context: Context,
+        id: Int,
+        title: String,
+        body: String,
+        resourceName: String = "human_azkar_01"
+    ) {
+        createChannels(context)
+        val soundEnabled = PreferencesManager.isNotificationSoundEnabled(context)
+        val resolvedResourceId = context.resources.getIdentifier(resourceName, "raw", context.packageName)
+            .takeIf { it != 0 } ?: R.raw.human_azkar_01
+        val resolvedResourceName = HumanAzkarAudioCatalog.tracks
+            .firstOrNull { it.resourceName == resourceName }?.resourceName ?: "human_azkar_01"
+        val selectedTrack = HumanAzkarAudioCatalog.tracks
+            .firstOrNull { it.resourceName == resolvedResourceName }
+        val channel = if (soundEnabled) {
+            humanAzkarTrackChannel(
+                context = context,
+                resourceName = resolvedResourceName,
+                resourceId = resolvedResourceId,
+                displayName = selectedTrack?.title ?: "تسجيل بشري"
+            )
+        } else CHANNEL_HUMAN_AZKAR_SILENT
+        val openIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+        val openPending = PendingIntent.getActivity(context, id, openIntent, flags)
+        val builder = NotificationCompat.Builder(context, channel)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setAutoCancel(true)
+            .setContentIntent(openPending)
+            .setPriority(if (soundEnabled) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_LOW)
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O && soundEnabled) {
+            builder.setSound(Uri.parse("android.resource://${context.packageName}/$resolvedResourceId"))
+        }
+        if (!soundEnabled) builder.setSilent(true)
+
+        try {
+            NotificationManagerCompat.from(context).notify(id, builder.build())
+        } catch (_: SecurityException) {
+            // Notification permission can be revoked while an interval is already scheduled.
+        }
+    }
+
+    private fun humanAzkarTrackChannel(
+        context: Context,
+        resourceName: String,
+        resourceId: Int,
+        displayName: String
+    ): String {
+        val channelId = "${CHANNEL_HUMAN_AZKAR}_$resourceName"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val soundUri = Uri.parse("android.resource://${context.packageName}/$resourceId")
+            val audioAttrs = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build()
+            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    channelId,
+                    "التسجيل البشري — $displayName",
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "يشغل المقطع البشري التالي بالتناوب عند تعذر تشغيل الخدمة الصوتية."
+                    setSound(soundUri, audioAttrs)
+                    enableVibration(false)
+                }
+            )
+        }
+        return channelId
     }
 }

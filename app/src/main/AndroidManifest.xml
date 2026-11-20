@@ -52,6 +52,7 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <action android:name="android.intent.action.TIME_SET" />
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
         </receiver>
 
@@ -64,6 +65,12 @@
         <!-- مستقبل منبّه وقت الأذكار اليومي (إشعارات صوتية تلقائية) -->
         <receiver
             android:name=".receiver.AzkarAlarmReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- منبه مستقل لتشغيل التسجيلات البشرية بحسب الفاصل الذي يختاره المستخدم -->
+        <receiver
+            android:name=".receiver.HumanAzkarAlarmReceiver"
             android:enabled="true"
             android:exported="false" />
 

@@ -5,11 +5,13 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -20,15 +22,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.data.HijriCalendar
 import com.example.data.HisnChapter
 import com.example.data.HisnRepository
+import com.example.data.RuqyahData
 import com.example.data.TtsManager
 import com.example.ui.components.SmartReaderBus
 
@@ -63,12 +70,15 @@ fun HomeScreen(
         HisnRepository.featuredIds().mapNotNull { HisnRepository.chapter(it) }
     }
     val daily = remember(featured) { featured.firstOrNull() }
-
-    // إشعار حقوق المطور: يظهر عند فتح الشاشة الرئيسية ويختفي تلقائيًا
-    var showCopyright by remember { mutableStateOf(true) }
-    LaunchedEffect(Unit) {
-        delay(6000)
-        showCopyright = false
+    val morningChapter = remember(HisnRepository.isLoaded) {
+        HisnRepository.chapters.firstOrNull {
+            HisnRepository.normalize(it.title) == HisnRepository.normalize("أذكار الصباح")
+        }
+    }
+    val eveningChapter = remember(featured) {
+        HisnRepository.chapters.firstOrNull {
+            HisnRepository.normalize(it.title) == HisnRepository.normalize("أذكار المساء")
+        }
     }
 
     Scaffold(
@@ -90,7 +100,12 @@ fun HomeScreen(
                     IconButton(onClick = onAdvancedSettingsClick) {
                         Icon(Icons.Default.Settings, contentDescription = "الإعدادات")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color(0xFF123B31),
+                    titleContentColor = Color.White,
+                    actionIconContentColor = Color.White
+                )
             )
         }
     ) { padding ->
@@ -98,16 +113,26 @@ fun HomeScreen(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.28f),
-                            MaterialTheme.colorScheme.background,
-                            MaterialTheme.colorScheme.surface
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.home_background),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color(0x33112720),
+                                Color(0x50112720),
+                                Color(0x88111D18)
+                            )
                         )
                     )
-                )
-        ) {
+            )
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
@@ -117,93 +142,64 @@ fun HomeScreen(
                 HeroCard(daily)
             }
 
+            item { HomeSectionTitle("أذكار اليوم") }
             item {
-                Text("الأقسام", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FeatureCard("أذكار الصباح", "ورد الصباح", Icons.Default.WbSunny, Modifier.weight(1f)) {
+                        morningChapter?.let { onChapterClick(it.id) } ?: onHisnClick()
+                    }
+                    FeatureCard("أذكار المساء", "ورد المساء", Icons.Default.Bedtime, Modifier.weight(1f)) {
+                        eveningChapter?.let { onChapterClick(it.id) } ?: onHisnClick()
+                    }
+                }
             }
-
+            item { HomeSectionTitle("القرآن الكريم") }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FeatureCard("القرآن الكريم", "114 سورة", Icons.Default.MenuBook, Modifier.weight(1f), onQuranClick)
+                    FeatureCard("خطة ختم القرآن", "604 صفحة ÷ المدة", Icons.Default.EventAvailable, Modifier.weight(1f), onKhatmahClick)
+                }
+            }
+            item { HomeSectionTitle("الذكر والاستماع") }
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        FeatureCard(
-                            "القرآن الكريم", "114 سورة كاملة", Icons.Default.MenuBook,
-                            Modifier.weight(1f), onQuranClick
-                        )
-                        FeatureCard(
-                            "حصن المسلم", "132 بابًا", Icons.Default.Security,
-                            Modifier.weight(1f), onHisnClick
-                        )
+                        FeatureCard("المسبحة", "عدّاد وهدف يومي", Icons.Default.TouchApp, Modifier.weight(1f), onTasbeehClick)
+                        FeatureCard("حصن المسلم", "${HisnRepository.chapters.size} بابًا", Icons.Default.Security, Modifier.weight(1f), onHisnClick)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        FeatureCard(
-                            "المسبحة", "عدّ أذكارك", Icons.Default.TouchApp,
-                            Modifier.weight(1f), onTasbeehClick
-                        )
-                        FeatureCard(
-                            "تذكيراتي", "أوقات تحددها", Icons.Default.Alarm,
-                            Modifier.weight(1f), onRemindersClick
-                        )
+                        FeatureCard("الأذكار الصوتية", "تسجيلات بشرية", Icons.Default.Headphones, Modifier.weight(1f), onAudioAzkarClick)
+                        FeatureCard("الرقية الشرعية", "${RuqyahData.items.size} نصًا", Icons.Default.HealthAndSafety, Modifier.weight(1f), onRuqyahClick)
+                    }
+                }
+            }
+            item { HomeSectionTitle("الأدعية والمعرفة") }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FeatureCard("الأدعية والأحاديث", "82 نصًا مأثورًا", Icons.Default.MenuBook, Modifier.weight(1f), onAdiyaClick)
+                        FeatureCard("أدعية الأنبياء", "أدعية قرآنية", Icons.Default.Book, Modifier.weight(1f), onProphetDuasClick)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        FeatureCard(
-                            "التقويم الهجري", "المناسبات", Icons.Default.CalendarMonth,
-                            Modifier.weight(1f), onHijriClick
-                        )
-                        FeatureCard(
-                            "أذكاري الخاصة", "أضف وعدّل", Icons.Default.EditNote,
-                            Modifier.weight(1f), onCustomAzkarClick
-                        )
+                        FeatureCard("أسماء الله الحسنى", "معاني الأسماء", Icons.Default.AutoAwesome, Modifier.weight(1f), onNamesOfAllahClick)
+                        FeatureCard("خطة الورد اليومي", "تقدّمك وسلسلتك", Icons.Default.CheckCircle, Modifier.weight(1f), onWirdClick)
+                    }
+                }
+            }
+            item { HomeSectionTitle("أدوات وتنظيم") }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FeatureCard("تذكيراتي", "أوقات تحددها", Icons.Default.Alarm, Modifier.weight(1f), onRemindersClick)
+                        FeatureCard("أذكاري الخاصة", "أضف وعدّل", Icons.Default.EditNote, Modifier.weight(1f), onCustomAzkarClick)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        FeatureCard(
-                            "المساعد الصوتي", "الروبوت يقرأ", Icons.Default.RecordVoiceOver,
-                            Modifier.weight(1f), onAiRobotClick
-                        )
-                        FeatureCard(
-                            "الرفيق الروحي", "حسب حالتك", Icons.Default.Favorite,
-                            Modifier.weight(1f), onSpiritualCompanionClick
-                        )
+                        FeatureCard("التقويم الهجري", "التاريخ والمناسبات", Icons.Default.CalendarMonth, Modifier.weight(1f), onHijriClick)
+                        FeatureCard("القارئ الذكي", "استمع للنص المحدد", Icons.Default.RecordVoiceOver, Modifier.weight(1f), onAiRobotClick)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        FeatureCard(
-                            "الأذكار الصوتية", "استمع للأذكار", Icons.Default.Headphones,
-                            Modifier.weight(1f), onAudioAzkarClick
-                        )
-                        FeatureCard(
-                            "حصن المسلم", "أذكار وأدعية", Icons.Default.Security,
-                            Modifier.weight(1f), onHisnClick
-                        )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        FeatureCard(
-                            "خطة الورد اليومي", "تابع تقدّمك وسلسلتك", Icons.Default.CheckCircle,
-                            Modifier.weight(1f), onWirdClick
-                        )
-                        FeatureCard(
-                            "الرقية الشرعية", "30 نصًّا ثابتًا", Icons.Default.HealthAndSafety,
-                            Modifier.weight(1f), onRuqyahClick
-                        )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        FeatureCard(
-                            "الأدعية والأربعون النبوية", "80 دعاءً مأثورًا", Icons.Default.MenuBook,
-                            Modifier.weight(1f), onAdiyaClick
-                        )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        FeatureCard(
-                            "خطة ختم القرآن", "604 صفحة ÷ المدة", Icons.Default.EventAvailable,
-                            Modifier.weight(1f), onKhatmahClick
-                        )
-                        FeatureCard(
-                            "أسماء الله الحسنى", "99 اسمًا بمعانيها", Icons.Default.AutoAwesome,
-                            Modifier.weight(1f), onNamesOfAllahClick
-                        )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        FeatureCard(
-                            "أدعية الأنبياء", "25 دعاءً قرآنيًا", Icons.Default.Book,
-                            Modifier.weight(1f), onProphetDuasClick
-                        )
+                        FeatureCard("الرفيق الروحي", "إرشاد يومي", Icons.Default.Favorite, Modifier.weight(1f), onSpiritualCompanionClick)
+                        Spacer(Modifier.weight(1f))
                     }
                 }
             }
@@ -213,6 +209,7 @@ fun HomeScreen(
                     "أبواب مميزة من حصن المسلم",
                     fontWeight = FontWeight.Bold,
                     fontSize = 17.sp,
+                    color = Color(0xFFFFF5D9),
                     modifier = Modifier.padding(top = 6.dp)
                 )
             }
@@ -226,16 +223,6 @@ fun HomeScreen(
             }
             }
 
-            AnimatedVisibility(
-                visible = showCopyright,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(12.dp),
-                enter = fadeIn() + slideInVertically { -it },
-                exit = fadeOut() + slideOutVertically { -it }
-            ) {
-                CopyrightBanner()
-            }
         }
     }
 }
@@ -307,10 +294,28 @@ private fun DeveloperFooter() {
 }
 
 @Composable
+private fun HomeSectionTitle(title: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .width(4.dp)
+                .height(20.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(Color(0xFFFFD36A))
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFFFFF4D4))
+    }
+}
+
+@Composable
 private fun HeroCard(chapter: HisnChapter?) {
     Card(
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
         Box(
             modifier = Modifier
@@ -318,8 +323,8 @@ private fun HeroCard(chapter: HisnChapter?) {
                 .background(
                     Brush.linearGradient(
                         listOf(
-                            MaterialTheme.colorScheme.primaryContainer,
-                            MaterialTheme.colorScheme.tertiaryContainer
+                            Color(0xEE174B3B),
+                            Color(0xE61B342D)
                         )
                     )
                 )
@@ -330,7 +335,7 @@ private fun HeroCard(chapter: HisnChapter?) {
                     "ذكر اليوم",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    color = Color(0xFFFFE29A)
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -338,7 +343,7 @@ private fun HeroCard(chapter: HisnChapter?) {
                     fontSize = 17.sp,
                     lineHeight = 28.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    color = Color.White
                 )
                 Spacer(Modifier.height(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -358,7 +363,7 @@ private fun HeroCard(chapter: HisnChapter?) {
                     Text(
                         chapter?.title ?: "من أذكار المسلم",
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                        color = Color.White.copy(alpha = 0.82f)
                     )
                 }
             }
@@ -376,10 +381,10 @@ private fun FeatureCard(
 ) {
     Card(
         modifier = modifier
-            .height(104.dp)
+            .heightIn(min = 108.dp)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xE6173D33)),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Column(
@@ -388,19 +393,32 @@ private fun FeatureCard(
                 .padding(12.dp),
             verticalArrangement = Arrangement.Center
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(26.dp)
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(title, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            Text(
-                subtitle,
-                fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x44FFD36A)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = Color(0xFFFFD36A),
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text(title, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1, color = Color.White)
+                    Text(
+                        subtitle,
+                        fontSize = 10.sp,
+                        color = Color(0xFFD8E5DD),
+                        maxLines = 2
+                    )
+                }
+            }
         }
     }
 }

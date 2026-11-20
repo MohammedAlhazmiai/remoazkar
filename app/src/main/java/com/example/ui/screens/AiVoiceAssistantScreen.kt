@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -43,6 +44,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,6 +63,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.R
 import com.example.data.HisnRepository
 import com.example.data.TtsManager
@@ -86,6 +91,18 @@ fun AiVoiceAssistantScreen(
 ) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var reloadVoiceOnResume by remember { mutableStateOf(false) }
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && reloadVoiceOnResume) {
+                reloadVoiceOnResume = false
+                TtsManager.init(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     HisnRepository.ensureLoaded(context)
 
     var speaking by remember { mutableStateOf(TtsManager.isSpeaking) }
@@ -234,6 +251,42 @@ fun AiVoiceAssistantScreen(
             }
 
             // ---------- إجراءات سريعة ----------
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("اختيار صوت القارئ", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Text(
+                            "يعتمد النطق على محرك تحويل النص إلى كلام في جهازك، وهو صوت اصطناعي وليس تسجيل تلاوة بشرية، ولا يضمن أحكام التجويد. يمكنك تثبيت صوت عربي رجالي واختياره من إعدادات الجهاز إذا كان متاحًا.",
+                            fontSize = 12.sp,
+                            lineHeight = 19.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedButton(
+                            onClick = {
+                                TtsManager.stop()
+                                TtsManager.shutdown()
+                                reloadVoiceOnResume = true
+                                runCatching {
+                                    context.startActivity(Intent("com.android.settings.TTS_SETTINGS"))
+                                }.onFailure {
+                                    reloadVoiceOnResume = false
+                                    TtsManager.init(context)
+                                    notice = "تعذّر فتح إعدادات الصوت على هذا الجهاز."
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.VolumeUp, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("إعداد أصوات النطق على الجهاز")
+                        }
+                    }
+                }
+            }
             item {
                 Text("اقرأ بضغطة واحدة", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }

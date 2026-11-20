@@ -7,7 +7,9 @@ import android.os.VibratorManager
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -52,21 +54,22 @@ fun TasbeehScreen(
     var stateRestored by remember { mutableStateOf(false) }
     LaunchedEffect(savedTotal) {
         if (!restored && savedTotal >= 0) {
-            totalCount = savedTotal
+            totalCount = savedTotal.coerceAtLeast(0)
             restored = true
         }
     }
     LaunchedEffect(savedState) {
         val state = savedState
         if (!stateRestored && state != null) {
-            count = state.count
-            targetCount = state.target
+            targetCount = listOf(33, 100, 500, 1000).firstOrNull { it == state.target } ?: 33
+            count = state.count.coerceIn(0, targetCount - 1)
             selectedZikrIndex = state.zikrIndex.coerceIn(0, 5)
-            cyclesCompleted = state.cyclesCompleted
+            cyclesCompleted = state.cyclesCompleted.coerceAtLeast(0)
             vibrationEnabled = state.vibrationEnabled
             stateRestored = true
         }
     }
+    val counterReady = restored && stateRestored
 
     fun persistState() {
         scope.launch {
@@ -122,6 +125,7 @@ fun TasbeehScreen(
                 actions = {
                     IconButton(
                         onClick = { vibrationEnabled = !vibrationEnabled; persistState() },
+                        enabled = counterReady,
                         modifier = Modifier.testTag("vibration_toggle")
                     ) {
                         Icon(
@@ -135,6 +139,7 @@ fun TasbeehScreen(
                             count = 0
                             persistState()
                         },
+                        enabled = counterReady,
                         modifier = Modifier.testTag("reset_button")
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = "إعادة ضبط")
@@ -155,13 +160,14 @@ fun TasbeehScreen(
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 zikrOptions.forEachIndexed { index, zikr ->
                     val isSelected = selectedZikrIndex == index
                     FilterChip(
                         selected = isSelected,
+                        enabled = counterReady,
                         onClick = {
                             selectedZikrIndex = index
                             count = 0
@@ -246,12 +252,14 @@ fun TasbeehScreen(
                         .size(220.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.primary)
-                        .clickable {
+                        .clickable(enabled = counterReady) {
                             triggerVibration()
-                            count++
-                            totalCount++
-                            scope.launch { prefs.saveTasbeehTotal(totalCount) }
-                            if (count >= targetCount) {
+                            val nextCount = count + 1
+                            val nextTotal = totalCount + 1
+                            count = nextCount
+                            totalCount = nextTotal
+                            scope.launch { prefs.saveTasbeehTotal(nextTotal) }
+                            if (nextCount >= targetCount) {
                                 cyclesCompleted++
                                 count = 0
                             }
@@ -262,14 +270,14 @@ fun TasbeehScreen(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = "$count",
+                            text = if (counterReady) "$count" else "…",
                             fontSize = 68.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimary
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "اضغط هنا للتسبيح",
+                            text = if (counterReady) "اضغط هنا للتسبيح" else "جار استعادة العدّاد…",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
@@ -294,6 +302,7 @@ fun TasbeehScreen(
                 ) {
                     listOf(33, 100, 500, 1000).forEach { target ->
                         OutlinedButton(
+                            enabled = counterReady,
                             onClick = {
                                 targetCount = target
                                 count = 0

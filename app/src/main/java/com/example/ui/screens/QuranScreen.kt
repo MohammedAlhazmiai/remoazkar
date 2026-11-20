@@ -1,9 +1,11 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
@@ -81,16 +83,16 @@ fun QuranScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                val tabs = listOf("السور", "الصفحات", "الأجزاء", "الأحزاب")
+                val tabs = listOf("السور", "المصحف PDF", "الأجزاء", "الأحزاب", "تلاوة 604 صفحة")
                 tabs.forEachIndexed { index, label ->
                     FilterChip(
                         selected = mode == index,
                         onClick = { mode = index },
-                        label = { Text(label, fontSize = 13.sp) },
-                        modifier = Modifier.weight(1f)
+                        label = { Text(label, fontSize = 13.sp) }
                     )
                 }
             }
@@ -152,16 +154,15 @@ fun QuranScreen(
                                     IconButton(
                                         onClick = {
                                             TtsManager.toggle(
-                                                "سورة ${surah.name}، ${surah.revelationType}، " +
-                                                    "عدد آياتها ${surah.ayahCount} آية. " +
-                                                    "الموضع الذي يفتح في ملف المصحف تقريبي."
+                                                QuranRepository.ayahsOf(surah.number)
+                                                    .joinToString(separator = " ") { it.text }
                                             )
                                         }
                                     ) {
                                         Icon(
                                             if (TtsManager.isSpeaking) Icons.Default.Stop
                                             else Icons.Default.VolumeUp,
-                                            contentDescription = "اسمع بيانات السورة",
+                                            contentDescription = "اقرأ سورة ${surah.name} بصوت الجهاز",
                                             tint = MaterialTheme.colorScheme.primary
                                         )
                                     }
@@ -223,7 +224,7 @@ fun QuranScreen(
                     }
                 }
 
-                else -> {
+                3 -> {
                     Text(
                         text = "الأحزاب (240 حزبًا)",
                         fontSize = 13.sp,
@@ -238,6 +239,29 @@ fun QuranScreen(
                         gridItems((1..240).toList()) { hizb ->
                             NumberTile(hizb.toString()) {
                                 onPageClick(approximatePdfPage(QuranRepository.pageOfHizb(hizb)))
+                            }
+                        }
+                    }
+                }
+
+                else -> {
+                    Text(
+                        text = "اضغط رقم الصفحة لقراءة نصها من بيانات القرآن المحلية (604 صفحات). الصوت من محرك الجهاز وليس تسجيل تلاوة بشرية.",
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                    )
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(5),
+                        contentPadding = PaddingValues(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        gridItems((1..QuranRepository.pageCount()).toList()) { page ->
+                            NumberTile(page.toString()) {
+                                val pageText = QuranRepository.byPage(page).joinToString(" ") { it.text }
+                                if (pageText.isNotBlank()) TtsManager.toggle(pageText)
                             }
                         }
                     }

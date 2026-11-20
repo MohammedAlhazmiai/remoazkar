@@ -68,7 +68,7 @@ fun HisnScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                placeholder = { Text("ابحث في 132 بابًا من الأذكار…") },
+                placeholder = { Text("ابحث في ${chapters.size} بابًا من الأذكار…") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 singleLine = true,
                 shape = RoundedCornerShape(16.dp)

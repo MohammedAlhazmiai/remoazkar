@@ -64,16 +64,8 @@ object TtsManager {
                     if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED) {
                         lastError = "محرّك النطق العربي غير متوفر على هذا الجهاز"
                     } else {
-                        val arabicVoice = engine.voices
-                            ?.filter { it.locale.language.equals("ar", ignoreCase = true) }
-                            ?.sortedWith(
-                                compareBy<android.speech.tts.Voice> { it.isNetworkConnectionRequired }
-                                    .thenByDescending { it.quality }
-                                    .thenBy { it.latency }
-                                    .thenByDescending { it.locale.country.equals("SA", ignoreCase = true) }
-                            )
-                            ?.firstOrNull()
-                        if (arabicVoice != null) engine.voice = arabicVoice
+                        // لا نفرض صوتًا عشوائيًا من قائمة المحرك؛ بذلك يُحترم الصوت
+                        // العربي الذي يختاره المستخدم من إعدادات تحويل النص إلى كلام.
                         lastError = null
                     }
                     engine.setSpeechRate(rate.coerceIn(0.82f, 1.15f))

@@ -67,7 +67,7 @@ fun AdiyaScreen(
                 title = {
                     Column {
                         Text("الأدعية والأربعون النبوية", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                        Text("${AdiyaData.items.size} دعاءً مأثورًا", fontSize = 11.sp)
+                        Text("${AdiyaData.items.size} نصًّا مأثورًا", fontSize = 11.sp)
                     }
                 },
                 navigationIcon = {
