@@ -70,6 +70,7 @@ import com.example.ui.screens.RemindersScreen
 import com.example.ui.screens.RuqyahScreen
 import com.example.ui.screens.SearchScreen
 import com.example.ui.screens.SpiritualCompanionScreen
+import com.example.ui.screens.PathToSuccessScreen
 import com.example.ui.screens.SplashScreen
 import com.example.ui.screens.SupportDeveloperScreen
 import com.example.ui.screens.TasbeehScreen
@@ -323,12 +324,17 @@ private fun AppRoot(
                         onKhatmahClick = { navController.navigate("khatmah") },
                         onNamesOfAllahClick = { navController.navigate("names_of_allah") },
                         onProphetDuasClick = { navController.navigate("prophet_duas") },
-                        onAudioAzkarClick = { navController.navigate("audio_azkar") }
+                        onAudioAzkarClick = { navController.navigate("audio_azkar") },
+                        onPathToSuccessClick = { navController.navigate("path_to_success") }
                     )
                 }
 
                 composable("audio_azkar") {
                     AudioAzkarScreen(onBackClick = { navController.popBackStack() })
+                }
+
+                composable("path_to_success") {
+                    PathToSuccessScreen(onBackClick = { navController.popBackStack() })
                 }
 
                 // ---------- الصفحات الدينية الجديدة ----------
