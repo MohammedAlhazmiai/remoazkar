@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,11 +16,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.PathToSuccessData
+import com.example.data.SourcedText
 import com.example.data.TtsManager
 import com.example.util.ShareUtil
 
@@ -27,6 +30,7 @@ import com.example.util.ShareUtil
 @Composable
 fun PathToSuccessScreen(onBackClick: () -> Unit) {
     val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
     var selectedId by rememberSaveable { mutableStateOf(PathToSuccessData.sections.first().id) }
     val currentSection = PathToSuccessData.sections.firstOrNull { it.id == selectedId } ?: PathToSuccessData.sections.first()
 
@@ -41,9 +45,14 @@ fun PathToSuccessScreen(onBackClick: () -> Unit) {
                 },
                 actions = {
                     IconButton(onClick = {
+                        val paragraphSources = currentSection.paragraphs.joinToString("\n") {
+                            "المصدر: ${it.source} — ${it.url}"
+                        }
+                        val hadithSource = "\n\nالحديث: ${currentSection.hadith.text}\nالمصدر: ${currentSection.hadith.source} — ${currentSection.hadith.url}"
                         val fullText = "${currentSection.title}\n\n${currentSection.subtitle}\n\n" +
-                            currentSection.paragraphs.joinToString("\n\n") +
-                            "\n\nالآية: ${currentSection.quranAyah}\nالحديث: ${currentSection.hadith}"
+                            currentSection.paragraphs.joinToString("\n\n") { it.text } +
+                            "\n\nالآية (${currentSection.quranReference}): ${currentSection.quranAyah}" +
+                            "\nالمصدر: ${currentSection.quranUrl}\n\n$paragraphSources$hadithSource"
                         ShareUtil.share(context, fullText)
                     }) {
                         Icon(Icons.Default.Share, contentDescription = "مشاركة")
@@ -74,7 +83,9 @@ fun PathToSuccessScreen(onBackClick: () -> Unit) {
                         onClick = { selectedId = section.id },
                         text = {
                             Text(
-                                text = section.title.substringBefore("."),
+                                text = section.title.substringAfter(". ", section.title),
+                                maxLines = 1,
+                                softWrap = false,
                                 fontWeight = if (section.id == selectedId) FontWeight.Bold else FontWeight.Normal
                             )
                         }
@@ -107,11 +118,18 @@ fun PathToSuccessScreen(onBackClick: () -> Unit) {
                                 fontSize = 13.sp,
                                 color = Color.White.copy(alpha = 0.9f)
                             )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = currentSection.summary,
+                                fontSize = 13.sp,
+                                lineHeight = 20.sp,
+                                color = Color.White.copy(alpha = 0.92f)
+                            )
                             Spacer(Modifier.height(10.dp))
                             FilledTonalButton(
                                 onClick = {
                                     val speech = "${currentSection.title}. ${currentSection.subtitle}. " +
-                                        currentSection.paragraphs.joinToString(". ")
+                                        currentSection.paragraphs.joinToString(". ") { it.text }
                                     TtsManager.toggle(speech)
                                 },
                                 colors = ButtonDefaults.filledTonalButtonColors(
@@ -156,27 +174,36 @@ fun PathToSuccessScreen(onBackClick: () -> Unit) {
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 lineHeight = 28.sp
                             )
+                            SourceLink(
+                                label = "المصدر: القرآن الكريم — ${currentSection.quranReference}",
+                                url = currentSection.quranUrl
+                            )
                         }
                     }
                 }
 
-                items(currentSection.paragraphs, key = { it.hashCode() }) { paragraph ->
+                items(
+                    items = currentSection.paragraphs,
+                    key = { "${currentSection.id}-${it.source.hashCode()}-${it.text.hashCode()}" }
+                ) { paragraph ->
                     Card(
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
-                        Text(
-                            text = paragraph,
-                            modifier = Modifier.padding(16.dp),
-                            fontSize = 16.sp,
-                            lineHeight = 30.sp,
-                            textAlign = TextAlign.Start,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = paragraph.text,
+                                fontSize = 16.sp,
+                                lineHeight = 30.sp,
+                                textAlign = TextAlign.Start,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            SourceLink(label = "المصدر: ${paragraph.source}", url = paragraph.url)
+                        }
                     }
                 }
 
-                item {
+                item(key = "hadith-${currentSection.id}") {
                     Card(
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
@@ -188,19 +215,23 @@ fun PathToSuccessScreen(onBackClick: () -> Unit) {
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "من هدي السنة النبوية",
+                                text = "حديث نبوي موثق",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.secondary
                             )
                             Spacer(Modifier.height(6.dp))
                             Text(
-                                text = currentSection.hadith,
+                                text = currentSection.hadith.text,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium,
                                 textAlign = TextAlign.Center,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer,
                                 lineHeight = 24.sp
+                            )
+                            SourceLink(
+                                label = "المصدر والرقم: ${currentSection.hadith.source}",
+                                url = currentSection.hadith.url
                             )
                         }
                     }
@@ -208,4 +239,19 @@ fun PathToSuccessScreen(onBackClick: () -> Unit) {
             }
         }
     }
+}
+
+@Composable
+private fun SourceLink(label: String, url: String) {
+    val uriHandler = LocalUriHandler.current
+    Text(
+        text = label,
+        modifier = Modifier
+            .padding(top = 8.dp)
+            .clickable { runCatching { uriHandler.openUri(url) } },
+        color = MaterialTheme.colorScheme.primary,
+        fontSize = 12.sp,
+        lineHeight = 18.sp,
+        textAlign = TextAlign.Center
+    )
 }
