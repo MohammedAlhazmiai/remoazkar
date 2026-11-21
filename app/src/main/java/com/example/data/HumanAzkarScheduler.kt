@@ -13,7 +13,7 @@ import com.example.service.AudioAzkarPlaybackService
 object HumanAzkarScheduler {
     const val MIN_INTERVAL_MINUTES = 1
     const val MAX_INTERVAL_MINUTES = 1440
-    const val DEFAULT_INTERVAL_MINUTES = 30
+    const val DEFAULT_INTERVAL_MINUTES = 5
 
     private const val PREFS_NAME = "rim_human_azkar_schedule"
     private const val KEY_ENABLED = "enabled"

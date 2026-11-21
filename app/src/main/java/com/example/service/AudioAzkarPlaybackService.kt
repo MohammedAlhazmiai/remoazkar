@@ -25,33 +25,54 @@ class AudioAzkarPlaybackService : Service() {
     private var speechChunks: List<String> = emptyList()
     private var chunkIndex = 0
     private var mediaPlayer: MediaPlayer? = null
+    private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onCreate() {
         super.onCreate()
         createChannel()
     }
 
+    private fun acquireWakeLock() {
+        if (wakeLock == null) {
+            val powerManager = getSystemService(POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "RimAzkar:AudioWakeLock").apply {
+                acquire(30 * 60 * 1000L)
+            }
+        }
+    }
+
+    private fun releaseWakeLock() {
+        try {
+            if (wakeLock?.isHeld == true) {
+                wakeLock?.release()
+            }
+        } catch (_: Exception) {}
+        wakeLock = null
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             stopPlayback()
-            return START_NOT_STICKY
+            return START_STICKY
         }
         pendingTitle = intent?.getStringExtra(EXTRA_TITLE) ?: "الأذكار الصوتية"
         val audioResourceName = intent?.getStringExtra(EXTRA_AUDIO_RESOURCE_NAME)?.trim().orEmpty()
+        acquireWakeLock()
         if (audioResourceName.isNotBlank()) {
             playHumanRecording(audioResourceName)
-            return START_NOT_STICKY
+            return START_STICKY
         }
         val text = intent?.getStringExtra(EXTRA_TEXT)?.trim().orEmpty()
         if (text.isBlank()) {
+            releaseWakeLock()
             stopSelf(startId)
-            return START_NOT_STICKY
+            return START_STICKY
         }
         releaseMediaPlayer()
         pendingText = text
         startForegroundCompat(buildNotification(pendingTitle, text.take(100)))
         if (tts == null) initializeTts() else if (ready) speakPending()
-        return START_NOT_STICKY
+        return START_STICKY
     }
 
     private fun playHumanRecording(resourceName: String) {
@@ -216,6 +237,7 @@ class AudioAzkarPlaybackService : Service() {
     private fun stopPlayback() {
         tts?.stop()
         releaseMediaPlayer()
+        releaseWakeLock()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -234,6 +256,7 @@ class AudioAzkarPlaybackService : Service() {
 
     override fun onDestroy() {
         releaseMediaPlayer()
+        releaseWakeLock()
         tts?.stop()
         tts?.shutdown()
         tts = null
