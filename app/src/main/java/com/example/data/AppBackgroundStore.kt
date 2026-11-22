@@ -96,16 +96,34 @@ object AppBackgroundStore {
     var currentHomeBgIndex by mutableIntStateOf(0)
         private set
 
+    /** فهرس الخلفية الموسمية الحالية في حال وجود أكثر من صورة للمناسبة. */
+    var currentSeasonalIndex by mutableIntStateOf(0)
+        private set
+
+    fun currentHomeSeason(): SeasonalOccasionTheme? = SeasonalBackgrounds.currentSeason()
+
     @DrawableRes
-    fun currentHomeDrawable(): Int =
-        builtInBackgrounds.getOrElse(currentHomeBgIndex.mod(builtInBackgrounds.size)) {
+    fun currentHomeDrawable(): Int {
+        val season = SeasonalBackgrounds.currentSeason()
+        if (season != null && season.drawables.isNotEmpty()) {
+            return season.drawables[currentSeasonalIndex.mod(season.drawables.size)]
+        }
+        return builtInBackgrounds.getOrElse(currentHomeBgIndex.mod(builtInBackgrounds.size)) {
             builtInBackgrounds.first()
         }.drawableRes
+    }
 
     /**
-     * يبدّل خلفية الشاشة الرئيسية إلى خلفية إسلامية مختلفة حتمًا عن الخلفية السابقة.
+     * يبدّل خلفية الشاشة الرئيسية إلى خلفية إسلامية مختلفة حتمًا عن الخلفية السابقة،
+     * وإذا كانت المناسبة الموسمية الحالية تحتوي أكثر من خلفية يبدّل بينها تلقائيًا.
      */
     fun rotateHomeBackground() {
+        val season = SeasonalBackgrounds.currentSeason()
+        if (season != null && season.drawables.size > 1) {
+            val sCount = season.drawables.size
+            val sCandidates = (0 until sCount).filter { it != currentSeasonalIndex.mod(sCount) }
+            currentSeasonalIndex = sCandidates[Random.nextInt(sCandidates.size)]
+        }
         val count = builtInBackgrounds.size
         if (count <= 1) return
         val candidates = (0 until count).filter { it != currentHomeBgIndex }

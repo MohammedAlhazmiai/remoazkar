@@ -190,15 +190,16 @@ fun HomeScreen(
                     )
                 }
             }
+            val activeSeason = if (customBitmap == null) AppBackgroundStore.currentHomeSeason() else null
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
                             listOf(
-                                Color(0x40112720),
-                                Color(0x5E112720),
-                                Color(0x90111D18)
+                                Color(0x1C112720),
+                                Color(0x4D112720),
+                                Color(0x8A111D18)
                             )
                         )
                     )
@@ -208,6 +209,14 @@ fun HomeScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+            if (activeSeason != null) {
+                item {
+                    SeasonalOccasionBanner(
+                        title = activeSeason.title,
+                        subtitle = activeSeason.subtitle
+                    )
+                }
+            }
             item {
                 HeroCard(daily)
             }
@@ -620,6 +629,58 @@ private fun NextPrayerHomeCard(
                     Icons.Default.Explore,
                     contentDescription = "اتجاه القبلة",
                     tint = Color(0xFFFFD36A)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SeasonalOccasionBanner(
+    title: String,
+    subtitle: String
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("home_seasonal_banner"),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xE6103227)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(Color(0x33FFD36A)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    tint = Color(0xFFFFD36A),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    title,
+                    color = Color(0xFFFFD36A),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+                Text(
+                    subtitle,
+                    color = Color(0xFFE7F2EC),
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp
                 )
             }
         }
