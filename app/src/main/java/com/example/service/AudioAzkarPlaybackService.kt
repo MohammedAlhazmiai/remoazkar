@@ -22,8 +22,10 @@ import java.util.Locale
 /**
  * خدمة تشغيل الأذكار الصوتية في الخلفية.
  *
- * - التسجيلات البشرية تُشغَّل **بشكل تسلسلي متواصل**: عند انتهاء مقطع يبدأ المقطع التالي تلقائيًا
- *   دون توقف، وتُحفظ حالة التشغيل في SharedPreferences حتى تستأنف الخدمة نفسها إن أعادها النظام.
+ * - التسجيلات البشرية تُشغَّل **مقطعًا واحدًا في كل مرة**، ثم يتوقف التشغيل، ويعود الدور إلى
+ *   المجدول الزمني (`HumanAzkarScheduler`) ليُشغّل المقطع التالي بعد الفاصل الذي اختاره المستخدم
+ *   (دقائق أو ساعات، جاهزة أو يدوية). لا يوجد أي تشغيل تسلسلي متواصل.
+ * - تُحفظ حالة التشغيل في SharedPreferences حتى تستأنف الخدمة نفسها إن أعادها النظام.
  * - الخدمة أمامية (Foreground) ولا تتوقف عند إزالة التطبيق من قائمة التطبيقات الحديثة
  *   (`android:stopWithTask="false"` + `onTaskRemoved`)، وتعمل مع قفل الشاشة عبر WakeLock متجدّد.
  */
@@ -98,10 +100,7 @@ class AudioAzkarPlaybackService : Service() {
         val audioResourceName = intent.getStringExtra(EXTRA_AUDIO_RESOURCE_NAME)?.trim().orEmpty()
 
         if (audioResourceName.isNotBlank()) {
-            // إذا كان التشغيل التسلسلي جاريًا بالفعل فلا نقطعه بطلب جديد من المنبّه الدوري.
-            if (playingHuman && mediaPlayer != null) {
-                return START_STICKY
-            }
+            // لا تسلسل: أي طلب جديد يستبدل المقطع الحالي ويُشغّل المقطع المطلوب مرة واحدة.
             acquireWakeLock()
             playHumanRecording(audioResourceName)
             return START_STICKY
@@ -144,13 +143,13 @@ class AudioAzkarPlaybackService : Service() {
         startForegroundCompat(
             buildNotification(
                 track.title,
-                "تشغيل تسلسلي · المقطع ${track.index} من ${HumanAzkarAudioCatalog.tracks.size}"
+                humanNotificationSnippet(track.index)
             )
         )
 
         val resourceId = resources.getIdentifier(track.resourceName, "raw", packageName)
         if (resourceId == 0) {
-            advanceHumanTrack()
+            finishHumanTrack()
             return
         }
 
@@ -169,16 +168,16 @@ class AudioAzkarPlaybackService : Service() {
                     runCatching { prepared.start() }
                 }
             }
-            // الانتقال إلى المقطع التالي تلقائيًا بدلًا من الإيقاف.
+            // عند انتهاء المقطع يتوقف التشغيل؛ المقطع التالي يأتي من المجدول الزمني حسب الفاصل المختار.
             player.setOnCompletionListener { completed ->
                 if (mediaPlayer === completed) {
                     releaseMediaPlayer()
-                    advanceHumanTrack()
+                    finishHumanTrack()
                 }
             }
             player.setOnErrorListener { _, _, _ ->
                 releaseMediaPlayer()
-                advanceHumanTrack()
+                finishHumanTrack()
                 true
             }
             resources.openRawResourceFd(resourceId).use { descriptor ->
@@ -191,14 +190,22 @@ class AudioAzkarPlaybackService : Service() {
             player.prepareAsync()
         } catch (_: Exception) {
             releaseMediaPlayer()
-            advanceHumanTrack()
+            finishHumanTrack()
         }
     }
 
-    private fun advanceHumanTrack() {
-        if (!playingHuman) return
-        humanIndex = (humanIndex + 1) % HumanAzkarAudioCatalog.tracks.size
-        startHumanTrack()
+    /**
+     * إنهاء تشغيل المقطع الحالي دون الانتقال إلى مقطع آخر.
+     * المجدول الزمني (HumanAzkarScheduler) هو من يُحدّد موعد المقطع التالي حسب الفاصل المختار،
+     * لذا لا نعيد الجدولة هنا حتى يبقى الفاصل دقيقًا من لحظة المنبّه.
+     */
+    private fun finishHumanTrack() {
+        playingHuman = false
+        prefs.edit().putBoolean(KEY_PLAYING, false).apply()
+        releaseMediaPlayer()
+        releaseWakeLock()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
     }
 
     /* ------------------------------- TTS ------------------------------- */
@@ -281,6 +288,30 @@ class AudioAzkarPlaybackService : Service() {
             start = end
         }
         return out
+    }
+
+    /** نص الإشعار: يوضّح أن التشغيل مقطع واحد وأن التالي يأتي حسب الفاصل الذي اختاره المستخدم. */
+    private fun humanNotificationSnippet(index: Int): String {
+        val total = HumanAzkarAudioCatalog.tracks.size
+        val periodic = runCatching {
+            com.example.data.HumanAzkarScheduler.isEnabled(applicationContext)
+        }.getOrDefault(false)
+        val minutes = runCatching {
+            com.example.data.HumanAzkarScheduler.intervalMinutes(applicationContext)
+        }.getOrDefault(0)
+        return if (periodic && minutes > 0) {
+            "المقطع $index من $total · التالي بعد ${formatInterval(minutes)}"
+        } else {
+            "المقطع $index من $total · تشغيل مرة واحدة"
+        }
+    }
+
+    private fun formatInterval(minutes: Int): String {
+        if (minutes % 60 == 0) {
+            val hours = minutes / 60
+            return if (hours == 1) "ساعة واحدة" else "$hours ساعات"
+        }
+        return "$minutes دقيقة"
     }
 
     /* --------------------------- الإشعارات --------------------------- */
@@ -402,7 +433,7 @@ class AudioAzkarPlaybackService : Service() {
     }
 
     /**
-     * إزالة التطبيق من قائمة التطبيقات الحديثة لا توقف التشغيل؛ الخدمة تبقى أمامية وتكمل التسلسل.
+     * إزالة التطبيق من قائمة التطبيقات الحديثة لا تقطع المقطع الجاري؛ الخدمة تبقى أمامية حتى نهاية المقطع.
      */
     override fun onTaskRemoved(rootIntent: Intent?) {
         if (!playingHuman && mediaPlayer == null) {

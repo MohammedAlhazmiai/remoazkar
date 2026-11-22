@@ -197,6 +197,7 @@ private fun HumanRecordingsContent() {
     var enabled by remember { mutableStateOf(HumanAzkarScheduler.isEnabled(context)) }
     var intervalMinutes by remember { mutableIntStateOf(HumanAzkarScheduler.intervalMinutes(context)) }
     var customInterval by rememberSaveable { mutableStateOf("") }
+    var customUnitIsHours by rememberSaveable { mutableStateOf(false) }
     var canScheduleExact by remember { mutableStateOf(HumanAzkarScheduler.canScheduleExactAlarms(context)) }
 
     DisposableEffect(lifecycleOwner, context) {
@@ -238,7 +239,7 @@ private fun HumanRecordingsContent() {
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
             ) {
                 Text(
-                    "تضمّن التطبيق 28 تسجيلًا بشريًا قصيرًا من الملف المرفق. يمكنك معاينة كل مقطع أدناه، أو تفعيل تشغيلها بالتناوب على فاصل زمني تختاره.",
+                    "تضمّن التطبيق 28 تسجيلًا بشريًا قصيرًا من الملف المرفق. يمكنك معاينة كل مقطع أدناه، أو تفعيل تشغيلها بالتناوب على الفاصل الزمني الذي تختاره (دقائق أو ساعات، جاهزة أو يدوية). يتوقف التشغيل بعد كل مقطع ثم يُشغَّل المقطع التالي بعد الفاصل المحدد.",
                     modifier = Modifier.padding(14.dp),
                     fontSize = 13.sp,
                     lineHeight = 20.sp,
@@ -253,7 +254,7 @@ private fun HumanRecordingsContent() {
                         Column(Modifier.weight(1f)) {
                             Text("تشغيل دوري للتسجيلات", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                             Text(
-                                if (enabled) "يُشغّل مقطعًا بشريًا جديدًا كل $intervalMinutes دقيقة."
+                                if (enabled) "يُشغّل مقطعًا بشريًا واحدًا كل ${intervalLabel(intervalMinutes)}، ثم يتوقف حتى الموعد التالي."
                                 else "التشغيل الدوري متوقف إلى أن تفعّله.",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -277,21 +278,46 @@ private fun HumanRecordingsContent() {
                         )
                     }
 
-                    Text("الفاصل بالدقائق (من 1 إلى 1440)", fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    Text(
+                        "اختر الفاصل بين كل ذكر والذي يليه (من 1 دقيقة إلى 1440 دقيقة)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                     Row(
                         modifier = Modifier.horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        listOf(1, 2, 5, 10, 15, 30, 60).forEach { minutes ->
+                        listOf(1, 2, 3, 5, 10, 30, 60, 120, 180).forEach { minutes ->
                             FilterChip(
                                 selected = intervalMinutes == minutes,
                                 onClick = {
                                     intervalMinutes = minutes
                                     HumanAzkarScheduler.setIntervalMinutes(context, minutes)
                                 },
-                                label = { Text(if (minutes < 60) "$minutes د" else "1 س") }
+                                label = { Text(intervalLabel(minutes)) }
                             )
                         }
+                    }
+                    Text(
+                        "الذكر الحالي: كل ${intervalLabel(intervalMinutes)}",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FilterChip(
+                            selected = !customUnitIsHours,
+                            onClick = { customUnitIsHours = false },
+                            label = { Text("دقائق") }
+                        )
+                        FilterChip(
+                            selected = customUnitIsHours,
+                            onClick = { customUnitIsHours = true },
+                            label = { Text("ساعات") }
+                        )
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(
@@ -301,17 +327,25 @@ private fun HumanRecordingsContent() {
                                     customInterval = value
                                 }
                             },
-                            label = { Text("فاصل مخصص") },
-                            placeholder = { Text("مثال: 45") },
+                            label = { Text(if (customUnitIsHours) "فاصل مخصص (ساعات)" else "فاصل مخصص (دقائق)") },
+                            placeholder = { Text(if (customUnitIsHours) "مثال: 2" else "مثال: 45") },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.weight(1f)
                         )
                         Spacer(Modifier.width(8.dp))
                         Button(onClick = {
-                            val minutes = parseIntervalMinutes(customInterval)
+                            val entered = parseIntervalMinutes(customInterval)
+                            val minutes = entered?.let { if (customUnitIsHours) it * 60 else it }
                             if (minutes == null || minutes !in HumanAzkarScheduler.MIN_INTERVAL_MINUTES..HumanAzkarScheduler.MAX_INTERVAL_MINUTES) {
-                                Toast.makeText(context, "أدخل عددًا صحيحًا بين 1 و1440 دقيقة.", Toast.LENGTH_LONG).show()
+                                Toast.makeText(
+                                    context,
+                                    if (customUnitIsHours)
+                                        "أدخل عددًا صحيحًا من الساعات بحيث لا يتجاوز 24 ساعة."
+                                    else
+                                        "أدخل عددًا صحيحًا بين 1 و1440 دقيقة.",
+                                    Toast.LENGTH_LONG
+                                ).show()
                             } else {
                                 intervalMinutes = minutes
                                 HumanAzkarScheduler.setIntervalMinutes(context, minutes)
@@ -376,6 +410,13 @@ private fun HumanRecordingsContent() {
             }
         }
     }
+}
+
+private fun intervalLabel(minutes: Int): String {
+    if (minutes < 60) return "$minutes د"
+    val hours = minutes / 60
+    val rest = minutes % 60
+    return if (rest == 0) "$hours س" else "$hours س $rest د"
 }
 
 private fun parseIntervalMinutes(input: String): Int? {

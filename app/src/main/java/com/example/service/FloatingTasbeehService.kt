@@ -19,25 +19,36 @@ import android.os.VibratorManager
 import android.provider.Settings
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
 import com.example.MainActivity
+import kotlin.math.abs
 
 /**
  * مسبحة عائمة فوق شاشة الهاتف تعمل خارج التطبيق.
  *
- * نافذة نظام حقيقية (SYSTEM_ALERT_WINDOW) عبر خدمة أمامية، قابلة للسحب،
+ * نافذة نظام حقيقية (SYSTEM_ALERT_WINDOW) عبر خدمة أمامية، قابلة للسحب بإصبع واحد،
+ * وقابلة للتكبير والتصغير بالسحب بإصبعين (Pinch-to-Zoom) مع حفظ الحجم المختار،
  * تُحتسب بالنقر على البطاقة، وتهتزّ عند إكمال العدد، وتُغلق بزر ✕.
  */
 class FloatingTasbeehService : Service() {
 
     private var windowManager: WindowManager? = null
     private var rootView: View? = null
+    private var cardView: LinearLayout? = null
+    private var titleView: TextView? = null
     private var countView: TextView? = null
     private var cycleView: TextView? = null
+    private var resetView: TextView? = null
+    private var closeView: TextView? = null
+
+    /** الحجم الحالي (1.0 = الحجم الافتراضي). */
+    private var currentScale = 1f
 
     private val prefs by lazy {
         applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -85,16 +96,13 @@ class FloatingTasbeehService : Service() {
         val density = resources.displayMetrics.density
         fun dp(value: Int) = (value * density).toInt()
 
+        currentScale = prefs.getFloat(KEY_SCALE, 1f).coerceIn(MIN_SCALE, MAX_SCALE)
+
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            background = GradientDrawable().apply {
-                cornerRadius = dp(22).toFloat()
-                setColor(Color.parseColor("#E6101A15"))
-                setStroke(dp(2), Color.parseColor("#4E9A78"))
-            }
-            setPadding(dp(14), dp(10), dp(14), dp(12))
         }
+        cardView = card
 
         // شريط العنوان مع زر الإغلاق ✕
         val header = LinearLayout(this).apply {
@@ -104,35 +112,32 @@ class FloatingTasbeehService : Service() {
         val title = TextView(this).apply {
             text = "مسبحة"
             setTextColor(Color.parseColor("#E8F0EC"))
-            textSize = 13f
             setPadding(0, 0, dp(10), 0)
         }
+        titleView = title
         val close = TextView(this).apply {
             text = "✕"
             setTextColor(Color.parseColor("#FF8A80"))
-            textSize = 18f
             setPadding(dp(8), 0, dp(4), 0)
             setOnClickListener {
                 setEnabledFlag(false)
                 stopSelf()
             }
         }
+        closeView = close
         header.addView(title)
         header.addView(close)
 
         val count = TextView(this).apply {
             text = prefs.getInt(KEY_COUNT, 0).toString()
             setTextColor(Color.parseColor("#E5C158"))
-            textSize = 34f
             gravity = Gravity.CENTER
-            setPadding(0, dp(2), 0, 0)
         }
         countView = count
 
         val cycle = TextView(this).apply {
             text = "الدورات: ${prefs.getInt(KEY_CYCLES, 0)} / ${prefs.getInt(KEY_TARGET, 33)}"
             setTextColor(Color.parseColor("#9EABA3"))
-            textSize = 10f
             gravity = Gravity.CENTER
         }
         cycleView = cycle
@@ -140,43 +145,141 @@ class FloatingTasbeehService : Service() {
         val reset = TextView(this).apply {
             text = "تصفير"
             setTextColor(Color.parseColor("#9EABA3"))
-            textSize = 11f
-            setPadding(dp(8), dp(6), dp(8), dp(2))
             setOnClickListener {
                 prefs.edit().putInt(KEY_COUNT, 0).apply()
                 count.text = "0"
             }
         }
+        resetView = reset
 
         card.addView(header)
         card.addView(count)
         card.addView(cycle)
         card.addView(reset)
 
-        // النقر على البطاقة (عدا زر الإغلاق والتصفير) يزيد العدد.
-        card.setOnClickListener { increment() }
+        // تطبيق المقاسات حسب الحجم المختار (يُستخدم عند البدء وعند تغيير الحجم بالسحب).
+        val applySizes: (Float) -> Unit = { scale ->
+            val s = scale.coerceIn(MIN_SCALE, MAX_SCALE)
+            title.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13f * s)
+            close.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 18f * s)
+            count.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 34f * s)
+            cycle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 10f * s)
+            reset.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 11f * s)
+            card.setPadding(
+                dp((14 * s).toInt()),
+                dp((10 * s).toInt()),
+                dp((14 * s).toInt()),
+                dp((12 * s).toInt())
+            )
+            reset.setPadding(
+                dp((8 * s).toInt()),
+                dp((6 * s).toInt()),
+                dp((8 * s).toInt()),
+                dp((2 * s).toInt())
+            )
+            title.setPadding(0, 0, dp((10 * s).toInt()), 0)
+            close.setPadding(
+                dp((8 * s).toInt()), 0, dp((4 * s).toInt()), 0
+            )
+            count.setPadding(0, dp((2 * s).toInt()), 0, 0)
+            card.background = GradientDrawable().apply {
+                cornerRadius = dp((22 * s).toInt()).toFloat()
+                setColor(Color.parseColor("#E6101A15"))
+                setStroke(dp((2 * s).coerceAtLeast(1f).toInt()), Color.parseColor("#4E9A78"))
+            }
+            card.requestLayout()
+        }
+        applySizes(currentScale)
 
-        // سحب البطاقة عبر شريط العنوان.
+        // --- التكبير والتصغير بالسحب بإصبعين ---
+        var previewScale = currentScale
+        val scaleDetector = ScaleGestureDetector(
+            this,
+            object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
+                    previewScale = currentScale
+                    return true
+                }
+
+                override fun onScale(detector: ScaleGestureDetector): Boolean {
+                    previewScale = (previewScale * detector.scaleFactor)
+                        .coerceIn(MIN_SCALE, MAX_SCALE)
+                    // معاينة فورية أثناء السحب
+                    val relative = previewScale / currentScale
+                    card.scaleX = relative
+                    card.scaleY = relative
+                    return true
+                }
+
+                override fun onScaleEnd(detector: ScaleGestureDetector) {
+                    currentScale = previewScale.coerceIn(MIN_SCALE, MAX_SCALE)
+                    card.scaleX = 1f
+                    card.scaleY = 1f
+                    applySizes(currentScale)
+                    prefs.edit().putFloat(KEY_SCALE, currentScale).apply()
+                }
+            }
+        )
+
+        // --- السحب بإصبع واحد + النقر للعدّ ---
+        val slop = ViewConfiguration.get(this).scaledTouchSlop
         var startX = 0
         var startY = 0
-        var touchX = 0f
-        var touchY = 0f
-        header.setOnTouchListener { _, event ->
-            when (event.action) {
+        var downX = 0f
+        var downY = 0f
+        var moved = false
+        var downAt = 0L
+
+        card.setOnTouchListener { _, event ->
+            scaleDetector.onTouchEvent(event)
+            when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     startX = params?.x ?: 0
                     startY = params?.y ?: 0
-                    touchX = event.rawX
-                    touchY = event.rawY
+                    downX = event.rawX
+                    downY = event.rawY
+                    moved = false
+                    downAt = System.currentTimeMillis()
                     true
                 }
+
+                MotionEvent.ACTION_POINTER_DOWN -> {
+                    // إصبع ثانٍ = تكبير/تصغير، وليس نقرة عدّ
+                    moved = true
+                    true
+                }
+
                 MotionEvent.ACTION_MOVE -> {
-                    val p = params ?: return@setOnTouchListener false
-                    p.x = startX + (event.rawX - touchX).toInt()
-                    p.y = startY + (event.rawY - touchY).toInt()
-                    runCatching { windowManager?.updateViewLayout(card, p) }
+                    if (event.pointerCount > 1) {
+                        moved = true
+                        return@setOnTouchListener true
+                    }
+                    val dx = event.rawX - downX
+                    val dy = event.rawY - downY
+                    if (!moved && (abs(dx) > slop || abs(dy) > slop)) moved = true
+                    if (moved) {
+                        val p = params ?: return@setOnTouchListener false
+                        p.x = startX + dx.toInt()
+                        p.y = startY + dy.toInt()
+                        runCatching { windowManager?.updateViewLayout(card, p) }
+                    }
                     true
                 }
+
+                MotionEvent.ACTION_UP -> {
+                    val quickTap = System.currentTimeMillis() - downAt < 700
+                    if (!moved && quickTap && event.pointerCount <= 1) {
+                        increment()
+                    }
+                    moved = false
+                    true
+                }
+
+                MotionEvent.ACTION_CANCEL -> {
+                    moved = false
+                    true
+                }
+
                 else -> true
             }
         }
@@ -193,8 +296,8 @@ class FloatingTasbeehService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = dp(12)
-            y = dp(160)
+            x = prefs.getInt(KEY_X, dp(12))
+            y = prefs.getInt(KEY_Y, dp(160))
         }
 
         runCatching { manager.addView(card, params) }
@@ -220,32 +323,32 @@ class FloatingTasbeehService : Service() {
         cycleView?.text = "الدورات: $cycles / $target"
     }
 
+    private fun vibrator(): Vibrator? = runCatching {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            (getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
+        } else {
+            @Suppress("DEPRECATION") getSystemService(VIBRATOR_SERVICE) as Vibrator
+        }
+    }.getOrNull()
+
     private fun vibrate() {
         runCatching {
-            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                (getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
-            } else {
-                @Suppress("DEPRECATION") getSystemService(VIBRATOR_SERVICE) as Vibrator
-            }
+            val v = vibrator() ?: return
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createOneShot(120, VibrationEffect.DEFAULT_AMPLITUDE))
+                v.vibrate(VibrationEffect.createOneShot(120, VibrationEffect.DEFAULT_AMPLITUDE))
             } else {
-                @Suppress("DEPRECATION") vibrator.vibrate(120)
+                @Suppress("DEPRECATION") v.vibrate(120)
             }
         }
     }
 
     private fun smallTick() {
         runCatching {
-            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                (getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
-            } else {
-                @Suppress("DEPRECATION") getSystemService(VIBRATOR_SERVICE) as Vibrator
-            }
+            val v = vibrator() ?: return
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createOneShot(18, 40))
+                v.vibrate(VibrationEffect.createOneShot(18, 40))
             } else {
-                @Suppress("DEPRECATION") vibrator.vibrate(18)
+                @Suppress("DEPRECATION") v.vibrate(18)
             }
         }
     }
@@ -266,7 +369,7 @@ class FloatingTasbeehService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_compass)
             .setContentTitle("المسبحة العائمة تعمل")
-            .setContentText("اضغط على المسبحة لعدّ الأذكار، وزر ✕ لإغلاقها")
+            .setContentText("اضغط للعدّ · اسحب بإصبعين للتكبير والتصغير · ✕ للإغلاق")
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(openPending)
@@ -295,12 +398,20 @@ class FloatingTasbeehService : Service() {
     }
 
     override fun onDestroy() {
+        // حفظ موضع المسبحة الأخير لتعود في نفس المكان.
+        params?.let { p ->
+            prefs.edit().putInt(KEY_X, p.x).putInt(KEY_Y, p.y).apply()
+        }
         rootView?.let { view ->
             runCatching { windowManager?.removeView(view) }
         }
         rootView = null
+        cardView = null
+        titleView = null
         countView = null
         cycleView = null
+        resetView = null
+        closeView = null
         super.onDestroy()
     }
 
@@ -312,11 +423,18 @@ class FloatingTasbeehService : Service() {
         const val CHANNEL_ID = "rim_floating_tasbeeh"
         const val NOTIFICATION_ID = 7052
 
+        /** حدود التكبير والتصغير بالسحب بالإصبعين. */
+        const val MIN_SCALE = 0.6f
+        const val MAX_SCALE = 2.4f
+
         private const val PREFS_NAME = "rim_floating_tasbeeh"
         private const val KEY_ENABLED = "enabled"
         private const val KEY_COUNT = "count"
         private const val KEY_CYCLES = "cycles"
         private const val KEY_TARGET = "target"
+        private const val KEY_SCALE = "scale"
+        private const val KEY_X = "x"
+        private const val KEY_Y = "y"
 
         fun isEnabled(context: Context): Boolean =
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
