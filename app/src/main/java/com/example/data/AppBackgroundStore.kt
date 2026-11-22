@@ -4,31 +4,54 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
+import androidx.annotation.DrawableRes
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
+import com.example.R
 import java.io.File
+import kotlin.random.Random
 
 /**
- * خلفية الصفحات.
+ * خلفية الصفحات وإدارة الخلفيات الإسلامية المدمجة.
  *
- * لكل صفحة في التطبيق خلفية مستقلة تمامًا: يمكن للمستخدم اختيار صورة مختلفة لكل صفحة،
- * أو تعيين نفس الصورة لعدة صفحات بتحديد أكثر من مربع ✔، أو إزالة خلفية صفحة دون غيرها.
- * تُنسخ الصور إلى ذاكرة التطبيق الداخلية (filesDir) حتى لا تنتهي صلاحية مسار المعرض،
- * وتُحفظ قائمة الصفحات المفعّلة في SharedPreferences.
+ * - توفّر خلفيات إسلامية دينية مناسبة لكل صفحات التطبيق مع إمكانية تفعيلها أو إيقافها.
+ * - تدعم التبديل التلقائي لخلفية الشاشة الرئيسية إلى خلفية مختلفة عند الرجوع إليها من أي صفحة.
+ * - تحفظ لكل صفحة خيار تعيين صورة مخصصة من معرض الهاتف أو اختيار أحد القوالب الإسلامية.
  */
 object AppBackgroundStore {
 
     private const val PREFS = "rim_app_background"
     private const val KEY_ENABLED_PAGES = "enabled_pages"
     private const val KEY_SCRIM = "background_scrim"
+    private const val KEY_ISLAMIC_BG_ENABLED = "islamic_bg_enabled"
+    private const val KEY_BUILTIN_PREFIX = "builtin_bg_"
     private const val FILE_PREFIX = "bg_page_"
     private const val LOG_TAG = "AppBackgroundStore"
 
-    const val DEFAULT_SCRIM = 35
+    const val DEFAULT_SCRIM = 42
 
     /** صفحة واحدة قابلة لتخصيص الخلفية. */
     data class BackgroundPage(val key: String, val title: String)
+
+    /** خلفية إسلامية مدمجة في التطبيق. */
+    data class BuiltInIslamicBackground(
+        val id: String,
+        val title: String,
+        @DrawableRes val drawableRes: Int
+    )
+
+    /**
+     * مجموعة الخلفيات الإسلامية الدينية المولّدة والمصممة لصفحات التطبيق.
+     */
+    val builtInBackgrounds: List<BuiltInIslamicBackground> = listOf(
+        BuiltInIslamicBackground("mosque", "أروقة المسجد", R.drawable.img_islamic_bg_mosque),
+        BuiltInIslamicBackground("arabesque", "زخرفة إسلامية", R.drawable.img_islamic_bg_arabesque),
+        BuiltInIslamicBackground("night", "هلال وليلة", R.drawable.img_islamic_bg_night),
+        BuiltInIslamicBackground("lantern", "فانوس النور", R.drawable.img_islamic_bg_lantern),
+        BuiltInIslamicBackground("courtyard", "نور المحراب", R.drawable.img_islamic_bg_courtyard),
+        BuiltInIslamicBackground("sanctuary", "الروضة الهادئة", R.drawable.home_background)
+    )
 
     /**
      * كل صفحات التطبيق التي يمكن تغيير خلفيتها. الترتيب هو ترتيب ظهورها في قائمة الاختيار.
@@ -67,6 +90,26 @@ object AppBackgroundStore {
     var revision by mutableIntStateOf(0)
         private set
 
+    /** فهرس الخلفية الإسلامية المعروضة حاليًا على الشاشة الرئيسية. */
+    var currentHomeBgIndex by mutableIntStateOf(0)
+        private set
+
+    @DrawableRes
+    fun currentHomeDrawable(): Int =
+        builtInBackgrounds.getOrElse(currentHomeBgIndex.mod(builtInBackgrounds.size)) {
+            builtInBackgrounds.first()
+        }.drawableRes
+
+    /**
+     * يبدّل خلفية الشاشة الرئيسية إلى خلفية إسلامية مختلفة حتمًا عن الخلفية السابقة.
+     */
+    fun rotateHomeBackground() {
+        val count = builtInBackgrounds.size
+        if (count <= 1) return
+        val candidates = (0 until count).filter { it != currentHomeBgIndex }
+        currentHomeBgIndex = candidates[Random.nextInt(candidates.size)]
+    }
+
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -102,16 +145,81 @@ object AppBackgroundStore {
     private fun enabledPages(context: Context): Set<String> =
         prefs(context).getStringSet(KEY_ENABLED_PAGES, emptySet()) ?: emptySet()
 
-    /** هل خلفية هذه الصفحة مفعّلة ولها صورة؟ */
+    /** هل خلفية هذه الصفحة مفعّلة ولها صورة من المعرض؟ */
     fun isEnabled(context: Context, pageKey: String): Boolean =
         enabledPages(context).contains(pageKey) && imagePath(context, pageKey) != null
 
-    /** هل توجد أي خلفية مفعّلة في التطبيق؟ */
+    /** هل توجد أي خلفية مخصصة مفعّلة في التطبيق؟ */
     fun hasAnyEnabled(context: Context): Boolean =
         enabledPages(context).any { imagePath(context, it) != null }
 
     fun isPageSelected(context: Context, pageKey: String): Boolean =
         enabledPages(context).contains(pageKey)
+
+    fun isIslamicBackgroundsEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ISLAMIC_BG_ENABLED, true)
+
+    fun setIslamicBackgroundsEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_ISLAMIC_BG_ENABLED, enabled).apply()
+        revision++
+    }
+
+    /** حفظ اختيار خلفية إسلامية مدمجة لصفحة معيّنة (أو null للعودة للتلقائي). */
+    fun setBuiltInForPage(context: Context, pageKey: String, bgId: String?) {
+        val editor = prefs(context).edit()
+        if (bgId == null) {
+            editor.remove(KEY_BUILTIN_PREFIX + pageKey)
+        } else {
+            editor.putString(KEY_BUILTIN_PREFIX + pageKey, bgId)
+            // إذا كان المستخدم يختار قالبًا إسلاميًا مدمجًا نزيل تعطيل الخلفية الإسلامية العامة
+            editor.putBoolean(KEY_ISLAMIC_BG_ENABLED, true)
+        }
+        editor.apply()
+        revision++
+    }
+
+    /** الخلفية الإسلامية الافتراضية المناسبة لكل صفحة من صفحات التطبيق. */
+    @DrawableRes
+    fun defaultDrawableForPage(pageKey: String?): Int? {
+        return when (pageKey) {
+            null, "home" -> null
+            "quran", "quran_reader", "khatmah" -> R.drawable.img_islamic_bg_arabesque
+            "hisn", "hisn_chapter", "custom_azkar", "audio_azkar" -> R.drawable.img_islamic_bg_mosque
+            "tasbeeh", "wird", "spiritual_companion" -> R.drawable.img_islamic_bg_lantern
+            "hijri", "reminders", "age_calculator" -> R.drawable.img_islamic_bg_night
+            "adiya", "ruqyah", "prophet_duas", "names_of_allah", "path_to_success" -> R.drawable.img_islamic_bg_courtyard
+            "advanced_settings" -> R.drawable.img_islamic_bg_arabesque
+            "ai_robot", "exclusive" -> R.drawable.img_islamic_bg_night
+            "favorites", "search" -> R.drawable.img_islamic_bg_courtyard
+            "about", "support_developer", "dev_link" -> R.drawable.img_islamic_bg_mosque
+            else -> R.drawable.img_islamic_bg_courtyard
+        }
+    }
+
+    @DrawableRes
+    fun effectiveBuiltInDrawableForPage(context: Context, pageKey: String?): Int? {
+        if (pageKey == null || pageKey == "home") return null
+        val overrideId = prefs(context).getString(KEY_BUILTIN_PREFIX + pageKey, null)
+        if (overrideId != null) {
+            builtInBackgrounds.firstOrNull { it.id == overrideId }?.let { return it.drawableRes }
+        }
+        return defaultDrawableForPage(pageKey)
+    }
+
+    /**
+     * هل ينبغي تفعيل طبقة الخلفية الشفافة لهذه الصفحة حاليًا؟
+     * الأولوية: صورة المعرض المخصصة -> لون الصفحة الصلب المخصص -> الخلفية الإسلامية المدمجة.
+     */
+    fun shouldRenderBackgroundLayer(
+        context: Context,
+        pageKey: String?,
+        hasCustomPageColor: Boolean
+    ): Boolean {
+        if (pageKey == null || pageKey == "home") return false
+        if (isEnabled(context, pageKey)) return true
+        if (hasCustomPageColor) return false
+        return isIslamicBackgroundsEnabled(context) && effectiveBuiltInDrawableForPage(context, pageKey) != null
+    }
 
     fun scrimPercent(context: Context): Int =
         prefs(context).getInt(KEY_SCRIM, DEFAULT_SCRIM).coerceIn(0, 85)
@@ -160,13 +268,20 @@ object AppBackgroundStore {
         runCatching { file(context, pageKey).delete() }
         val current = enabledPages(context).toMutableSet()
         current.remove(pageKey)
-        prefs(context).edit().putStringSet(KEY_ENABLED_PAGES, current).apply()
+        prefs(context).edit()
+            .putStringSet(KEY_ENABLED_PAGES, current)
+            .remove(KEY_BUILTIN_PREFIX + pageKey)
+            .apply()
         revision++
     }
 
     fun clearAll(context: Context) {
-        pages.forEach { page -> runCatching { file(context, page.key).delete() } }
-        prefs(context).edit().remove(KEY_ENABLED_PAGES).apply()
+        val editor = prefs(context).edit().remove(KEY_ENABLED_PAGES)
+        pages.forEach { page ->
+            runCatching { file(context, page.key).delete() }
+            editor.remove(KEY_BUILTIN_PREFIX + page.key)
+        }
+        editor.apply()
         revision++
     }
 }

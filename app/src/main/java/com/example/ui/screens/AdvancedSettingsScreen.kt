@@ -4,19 +4,26 @@ import android.Manifest
 import android.app.AlarmManager
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -29,24 +36,39 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.data.AppBackgroundStore
 import com.example.data.AthkarReminderScheduler
-import com.example.service.FloatingTasbeehService
 import com.example.data.PreferencesManager
+import com.example.service.FloatingTasbeehService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+private enum class SettingsCategory(
+    val title: String,
+    val icon: ImageVector
+) {
+    ALL("الكل", Icons.Default.GridView),
+    APPEARANCE("المظهر والخلفيات", Icons.Default.Palette),
+    READING_AUDIO("القراءة والصوت", Icons.Default.RecordVoiceOver),
+    NOTIFICATIONS("المسبحة والتنبيهات", Icons.Default.NotificationsActive),
+    DEVELOPER("المطور", Icons.Default.Verified)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,216 +94,692 @@ fun AdvancedSettingsScreen(
     onBackClick: () -> Unit
 ) {
     val context = LocalContext.current
+    var selectedCategory by rememberSaveable { mutableStateOf(SettingsCategory.ALL) }
+    val bgRevision = AppBackgroundStore.revision
+    val islamicBgEnabled = remember(bgRevision) {
+        AppBackgroundStore.isIslamicBackgroundsEnabled(context)
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("الإعدادات والخيارات المتقدمة الحصرية", fontWeight = FontWeight.Bold) },
+                title = {
+                    Column {
+                        Text("الإعدادات المتقدمة", fontWeight = FontWeight.Bold, fontSize = 19.sp)
+                        Text(
+                            "تخصيص المظهر والخلفيات والصوت والتنبيهات",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBackClick, modifier = Modifier.testTag("back_button")) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
             )
         }
     ) { paddingVals ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingVals)
-                .padding(16.dp),
+                .padding(paddingVals),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Theme & Display
+            // بطاقة ملخّص الحالة الحالية
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(modifier = Modifier.padding(20.dp)) {
-                        Text("مظهر التطبيق", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("الوضع الداكن (Night Mode)", fontSize = 15.sp)
-                            Switch(checked = darkMode, onCheckedChange = onToggleDarkMode)
-                        }
-                    }
-                }
-            }
-
-            // ألوان الصفحات وألوان الخطوط
-            item {
-                PageColorsCard(
-                    pageColor = pageColor,
-                    fontColor = fontColor,
-                    onPageColorChange = onPageColorChange,
-                    onFontColorChange = onFontColorChange
+                SettingsOverviewBanner(
+                    darkMode = darkMode,
+                    fontSizeIndex = fontSizeIndex,
+                    speechRate = speechRate,
+                    islamicBgEnabled = islamicBgEnabled
                 )
             }
 
-            // خلفية الصفحات من معرض الهاتف
+            // شريط تصفية الأقسام السريع
             item {
-                AppBackgroundCard()
-            }
-
-            // المسبحة العائمة فوق الشاشة
-            item {
-                FloatingTasbeehCard()
-            }
-
-            // Font Size Control
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Column(modifier = Modifier.padding(20.dp)) {
-                        Text("حجم الخط في شاشات القراءة", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        val fontSizes = listOf(
-                            0 to "صغير (16sp)",
-                            1 to "متوسط (18sp)",
-                            2 to "كبير (22sp)"
-                        )
-
-                        fontSizes.forEach { (index, label) ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onFontSizeChange(index) }
-                                    .padding(vertical = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(label, fontSize = 15.sp)
-                                RadioButton(
-                                    selected = fontSizeIndex == index,
-                                    onClick = { onFontSizeChange(index) }
+                    SettingsCategory.entries.forEach { category ->
+                        FilterChip(
+                            selected = selectedCategory == category,
+                            onClick = { selectedCategory = category },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = category.icon,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                            label = {
+                                Text(
+                                    category.title,
+                                    fontSize = 13.sp,
+                                    fontWeight = if (selectedCategory == category) FontWeight.Bold else FontWeight.Medium
                                 )
                             }
-                        }
-                    }
-                }
-            }
-
-            // AI Voice Robot Settings
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(modifier = Modifier.padding(20.dp)) {
-                        Text("إعدادات روبوت الذكاء الاصطناعي الصوتي", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Text("سرعة النطق: ${String.format("%.1f", speechRate)}x", fontSize = 14.sp)
-                        Slider(
-                            value = speechRate,
-                            onValueChange = onSpeechRateChange,
-                            valueRange = 0.5f..2.0f,
-                            steps = 5
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Text("نبرة الصوت: ${String.format("%.1f", speechPitch)}", fontSize = 14.sp)
-                        Slider(
-                            value = speechPitch,
-                            onValueChange = onSpeechPitchChange,
-                            valueRange = 0.5f..1.5f,
-                            steps = 3
                         )
                     }
                 }
             }
 
-            // Notifications & Sound
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(modifier = Modifier.padding(20.dp)) {
-                        Text("إشعارات الخلفية وشاشة القفل", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("صوت التنبيه مع الإشعارات", fontSize = 15.sp)
-                            Switch(checked = notificationSound, onCheckedChange = onToggleNotificationSound)
-                        }
-                        val notificationsAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            // 1. قسم المظهر والخلفيات والألوان
+            if (selectedCategory == SettingsCategory.ALL || selectedCategory == SettingsCategory.APPEARANCE) {
+                item {
+                    SettingsSectionHeader(
+                        title = "المظهر والخلفيات والألوان",
+                        subtitle = "الوضع الداكن، الخلفيات الإسلامية الدينية، وألوان الصفحات والخطوط",
+                        icon = Icons.Default.Palette
+                    )
+                }
+
+                item {
+                    ThemeAppearanceCard(
+                        darkMode = darkMode,
+                        onToggleDarkMode = onToggleDarkMode
+                    )
+                }
+
+                item {
+                    AppBackgroundCard()
+                }
+
+                item {
+                    PageColorsCard(
+                        pageColor = pageColor,
+                        fontColor = fontColor,
+                        onPageColorChange = onPageColorChange,
+                        onFontColorChange = onFontColorChange
+                    )
+                }
+            }
+
+            // 2. قسم القراءة والقارئ الذكي
+            if (selectedCategory == SettingsCategory.ALL || selectedCategory == SettingsCategory.READING_AUDIO) {
+                item {
+                    SettingsSectionHeader(
+                        title = "القراءة والقارئ الذكي",
+                        subtitle = "مقياس الخط في المصحف والأذكار وضبط سرعة ونبرة النطق",
+                        icon = Icons.Default.RecordVoiceOver
+                    )
+                }
+
+                item {
+                    FontSizeSettingsCard(
+                        fontSizeIndex = fontSizeIndex,
+                        onFontSizeChange = onFontSizeChange
+                    )
+                }
+
+                item {
+                    AiVoiceSettingsCard(
+                        speechRate = speechRate,
+                        onSpeechRateChange = onSpeechRateChange,
+                        speechPitch = speechPitch,
+                        onSpeechPitchChange = onSpeechPitchChange
+                    )
+                }
+            }
+
+            // 3. قسم المسبحة العائمة والإشعارات
+            if (selectedCategory == SettingsCategory.ALL || selectedCategory == SettingsCategory.NOTIFICATIONS) {
+                item {
+                    SettingsSectionHeader(
+                        title = "المسبحة العائمة والتنبيهات",
+                        subtitle = "ضبط ظهور المسبحة فوق الشاشة وإشعارات الأذكار التلقائية",
+                        icon = Icons.Default.NotificationsActive
+                    )
+                }
+
+                item {
+                    FloatingTasbeehCard()
+                }
+
+                item {
+                    BackgroundNotificationsCard(
+                        notificationSound = notificationSound,
+                        onToggleNotificationSound = onToggleNotificationSound
+                    )
+                }
+
+                item {
+                    AzkarNotificationsCard()
+                }
+            }
+
+            // 4. قسم صفحات المطور
+            if (selectedCategory == SettingsCategory.ALL || selectedCategory == SettingsCategory.DEVELOPER) {
+                item {
+                    SettingsSectionHeader(
+                        title = "التواصل وصفحات المطور",
+                        subtitle = "روابط الدعم والقناة والمدونة ومنصة الذكاء الاصطناعي",
+                        icon = Icons.Default.Verified
+                    )
+                }
+
+                item {
+                    DeveloperPagesCard(
+                        onSupportDeveloper = onSupportDeveloper,
+                        onTelegram = onTelegram,
+                        onBlog = onBlog,
+                        onPlatform = onPlatform
+                    )
+                }
+            }
+
+            item { Spacer(Modifier.height(72.dp)) }
+        }
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  عناصر تنظيمية قابلة لإعادة الاستخدام                             */
+/* ------------------------------------------------------------------ */
+
+@Composable
+private fun SettingsOverviewBanner(
+    darkMode: Boolean,
+    fontSizeIndex: Int,
+    speechRate: Float,
+    islamicBgEnabled: Boolean
+) {
+    val fontLabel = when (fontSizeIndex) {
+        0 -> "صغير"
+        2 -> "كبير"
+        else -> "متوسط"
+    }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            Color(0xFF154739),
+                            Color(0xFF1E5B48),
+                            Color(0xFF13342A)
+                        )
+                    )
+                )
+                .padding(18.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color(0x33FFD36A)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Tune,
+                            contentDescription = null,
+                            tint = Color(0xFFFFD36A),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column {
                         Text(
-                            if (notificationsAllowed) "إذن الإشعارات: مفعّل" else "إذن الإشعارات: غير مفعّل",
-                            fontSize = 12.sp,
-                            color = if (notificationsAllowed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                            "مركز تخصيص ريمو أذكار",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
                         )
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedButton(onClick = {
-                            val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                            runCatching { context.startActivity(intent) }
-                        }) {
-                            Icon(Icons.Default.NotificationsActive, contentDescription = null)
-                            Spacer(Modifier.width(6.dp))
-                            Text("فتح إعدادات إشعارات التطبيق")
-                        }
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            val alarmManager = context.getSystemService(android.content.Context.ALARM_SERVICE) as AlarmManager
-                            val exactAllowed = alarmManager.canScheduleExactAlarms()
-                            Text(
-                                if (exactAllowed) "المنبّه الدقيق: مسموح" else "المنبّه الدقيق: غير مسموح؛ قد يتأخر التنبيه اليومي",
-                                modifier = Modifier.padding(top = 8.dp),
-                                fontSize = 12.sp,
-                                color = if (exactAllowed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                            )
-                            OutlinedButton(onClick = {
-                                val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
-                                    .setData(Uri.parse("package:${context.packageName}"))
-                                runCatching { context.startActivity(intent) }
-                            }) {
-                                Icon(Icons.Default.Alarm, contentDescription = null)
-                                Spacer(Modifier.width(6.dp))
-                                Text("إعداد وصول المنبّهات الدقيقة")
-                            }
-                        }
+                        Text(
+                            "خلفيات إسلامية متجددة وتجربة قراءة مريحة",
+                            color = Color.White.copy(alpha = 0.8f),
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OverviewStatPill(
+                        label = if (darkMode) "داكن" else "فاتح",
+                        caption = "المظهر",
+                        modifier = Modifier.weight(1f)
+                    )
+                    OverviewStatPill(
+                        label = if (islamicBgEnabled) "مفعّلة" else "موقفة",
+                        caption = "الخلفيات",
+                        modifier = Modifier.weight(1f)
+                    )
+                    OverviewStatPill(
+                        label = fontLabel,
+                        caption = "الخط",
+                        modifier = Modifier.weight(1f)
+                    )
+                    OverviewStatPill(
+                        label = "${String.format("%.1f", speechRate)}x",
+                        caption = "النطق",
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OverviewStatPill(
+    label: String,
+    caption: String,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.White.copy(alpha = 0.12f))
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            caption,
+            color = Color(0xFFFFE39C),
+            fontSize = 10.sp,
+            maxLines = 1
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            label,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun SettingsSectionHeader(
+    title: String,
+    subtitle: String,
+    icon: ImageVector
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                title,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Text(
+                subtitle,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsCardShell(
+    title: String,
+    icon: ImageVector,
+    badge: String? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    title,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f)
+                )
+                if (badge != null) {
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                    ) {
+                        Text(
+                            badge,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
                     }
                 }
             }
+            Spacer(Modifier.height(14.dp))
+            content()
+        }
+    }
+}
 
-            // Automatic Azkar Notifications + Manual Time
-            item {
-                AzkarNotificationsCard()
+/* ------------------------------------------------------------------ */
+/*  بطاقات المظهر والخط والصوت والتنبيهات                            */
+/* ------------------------------------------------------------------ */
+
+@Composable
+private fun ThemeAppearanceCard(
+    darkMode: Boolean,
+    onToggleDarkMode: (Boolean) -> Unit
+) {
+    SettingsCardShell(
+        title = "مظهر التطبيق",
+        icon = if (darkMode) Icons.Default.DarkMode else Icons.Default.LightMode,
+        badge = if (darkMode) "داكن" else "فاتح"
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .clickable { onToggleDarkMode(!darkMode) },
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("الوضع الداكن (Night Mode)", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                Text(
+                    "مريح للعين في القراءة الليلية ويخفض سطوع الشاشة",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
+            Spacer(Modifier.width(12.dp))
+            Switch(checked = darkMode, onCheckedChange = onToggleDarkMode)
+        }
+    }
+}
 
-            // صفحات المطور — منقولة من تطبيق ريمو بلاير
-            item {
-                DeveloperPagesCard(
-                    onSupportDeveloper = onSupportDeveloper,
-                    onTelegram = onTelegram,
-                    onBlog = onBlog,
-                    onPlatform = onPlatform
+@Composable
+private fun FontSizeSettingsCard(
+    fontSizeIndex: Int,
+    onFontSizeChange: (Int) -> Unit
+) {
+    val fontSizes = listOf(
+        0 to ("صغير (16sp)" to 16.sp),
+        1 to ("متوسط (18sp)" to 18.sp),
+        2 to ("كبير (22sp)" to 22.sp)
+    )
+    SettingsCardShell(
+        title = "حجم الخط في شاشات القراءة",
+        icon = Icons.Default.FormatSize,
+        badge = when (fontSizeIndex) {
+            0 -> "صغير"
+            2 -> "كبير"
+            else -> "متوسط"
+        }
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+        ) {
+            Text(
+                text = "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ، سُبْحَانَ اللَّهِ الْعَظِيمِ",
+                fontSize = fontSizes.firstOrNull { it.first == fontSizeIndex }?.second?.second ?: 18.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(14.dp)
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        fontSizes.forEach { (index, pair) ->
+            val selected = fontSizeIndex == index
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                        else Color.Transparent
+                    )
+                    .clickable { onFontSizeChange(index) }
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    pair.first,
+                    fontSize = 14.sp,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                )
+                RadioButton(
+                    selected = selected,
+                    onClick = { onFontSizeChange(index) }
                 )
             }
         }
     }
 }
 
+@Composable
+private fun AiVoiceSettingsCard(
+    speechRate: Float,
+    onSpeechRateChange: (Float) -> Unit,
+    speechPitch: Float,
+    onSpeechPitchChange: (Float) -> Unit
+) {
+    SettingsCardShell(
+        title = "إعدادات روبوت الذكاء الاصطناعي الصوتي",
+        icon = Icons.Default.GraphicEq
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("سرعة النطق", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                "${String.format("%.1f", speechRate)}x",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        Slider(
+            value = speechRate,
+            onValueChange = onSpeechRateChange,
+            valueRange = 0.5f..2.0f,
+            steps = 5
+        )
+
+        Spacer(Modifier.height(10.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("نبرة الصوت", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                String.format("%.1f", speechPitch),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        Slider(
+            value = speechPitch,
+            onValueChange = onSpeechPitchChange,
+            valueRange = 0.5f..1.5f,
+            steps = 3
+        )
+
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(
+            onClick = {
+                onSpeechRateChange(1.0f)
+                onSpeechPitchChange(1.0f)
+            },
+            modifier = Modifier.heightIn(min = 48.dp)
+        ) {
+            Icon(Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("استعادة السرعة والنبرة الطبيعية")
+        }
+    }
+}
+
+@Composable
+private fun BackgroundNotificationsCard(
+    notificationSound: Boolean,
+    onToggleNotificationSound: (Boolean) -> Unit
+) {
+    val context = LocalContext.current
+    val notificationsAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+
+    SettingsCardShell(
+        title = "إشعارات الخلفية وشاشة القفل",
+        icon = Icons.Default.Notifications,
+        badge = if (notificationsAllowed) "الإذن مفعّل" else "يحتاج إذن"
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .clickable { onToggleNotificationSound(!notificationSound) },
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("صوت التنبيه مع الإشعارات", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            Switch(checked = notificationSound, onCheckedChange = onToggleNotificationSound)
+        }
+
+        Spacer(Modifier.height(10.dp))
+        PermissionStatusRow(
+            label = "إذن إظهار الإشعارات",
+            granted = notificationsAllowed,
+            grantedText = "مفعّل",
+            deniedText = "غير مفعّل"
+        )
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(
+            onClick = {
+                val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                runCatching { context.startActivity(intent) }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+        ) {
+            Icon(Icons.Default.NotificationsActive, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("فتح إعدادات إشعارات التطبيق")
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val alarmManager = context.getSystemService(android.content.Context.ALARM_SERVICE) as AlarmManager
+            val exactAllowed = alarmManager.canScheduleExactAlarms()
+            Spacer(Modifier.height(14.dp))
+            PermissionStatusRow(
+                label = "المنبّه الدقيق (للتوقيت المحدد)",
+                granted = exactAllowed,
+                grantedText = "مسموح",
+                deniedText = "غير مسموح؛ قد يتأخر التنبيه"
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = {
+                    val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                        .setData(Uri.parse("package:${context.packageName}"))
+                    runCatching { context.startActivity(intent) }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+            ) {
+                Icon(Icons.Default.Alarm, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("إعداد وصول المنبّهات الدقيقة")
+            }
+        }
+    }
+}
+
+@Composable
+private fun PermissionStatusRow(
+    label: String,
+    granted: Boolean,
+    grantedText: String,
+    deniedText: String
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                if (granted) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                else MaterialTheme.colorScheme.error.copy(alpha = 0.09f)
+            )
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Text(
+            if (granted) grantedText else deniedText,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = if (granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+        )
+    }
+}
+
 /* ------------------------------------------------------------------ */
-/* ------------------------------------------------------------------ */
-/*  خلفية الصفحات — لكل صفحة خلفية مستقلة                             */
+/*  خلفية الصفحات والخلفيات الإسلامية المدمجة                         */
 /* ------------------------------------------------------------------ */
 
 @Composable
@@ -292,11 +790,18 @@ private fun AppBackgroundCard() {
     var pendingTargets by remember { mutableStateOf<List<String>>(emptyList()) }
     var message by remember { mutableStateOf<String?>(null) }
     var scrim by remember(revision) { mutableIntStateOf(AppBackgroundStore.scrimPercent(context)) }
+    var islamicEnabled by remember(revision) {
+        mutableStateOf(AppBackgroundStore.isIslamicBackgroundsEnabled(context))
+    }
+    var pagesExpanded by rememberSaveable { mutableStateOf(false) }
 
     val selectedPages = remember(revision) {
         AppBackgroundStore.pages.map { it.key }
             .filter { AppBackgroundStore.isPageSelected(context, it) }
             .toSet()
+    }
+    val customCount = remember(revision) {
+        AppBackgroundStore.pages.count { AppBackgroundStore.isEnabled(context, it.key) }
     }
 
     val picker = rememberLauncherForActivityResult(
@@ -321,116 +826,250 @@ private fun AppBackgroundCard() {
 
     fun chooseFor(keys: List<String>) {
         if (keys.isEmpty()) {
-            message = "حدّد صفحة واحدة على الأقل بوضع علامة ✔ في الخانة الصغيرة أولًا"
+            message = "حدّد صفحة واحدة على الأقل بوضع علامة ✔ في القائمة أولًا"
+            pagesExpanded = true
             return
         }
         pendingTargets = keys
         picker.launch("image/*")
     }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    SettingsCardShell(
+        title = "الخلفيات الإسلامية وخلفيات الصفحات",
+        icon = Icons.Default.Wallpaper,
+        badge = if (islamicEnabled) "إسلامية متجددة" else "معطّلة"
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Text(
-                "خلفية الصفحات",
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
-                color = MaterialTheme.colorScheme.primary
+        // تفعيل الخلفيات الإسلامية الدينية المدمجة
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .clickable {
+                    val next = !islamicEnabled
+                    islamicEnabled = next
+                    AppBackgroundStore.setIslamicBackgroundsEnabled(context, next)
+                    message = if (next) {
+                        "تم تفعيل الخلفيات الإسلامية لكل صفحات التطبيق"
+                    } else {
+                        "تم إيقاف الخلفيات الإسلامية الافتراضية للصفحات"
+                    }
+                },
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("الخلفيات الإسلامية الدينية للصفحات", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "تُعرض خلفيات إسلامية هادئة في الصفحات، وتتبدّل خلفية الشاشة الرئيسية تلقائيًا عند الرجوع إليها.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            Switch(
+                checked = islamicEnabled,
+                onCheckedChange = { checked ->
+                    islamicEnabled = checked
+                    AppBackgroundStore.setIslamicBackgroundsEnabled(context, checked)
+                }
             )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "ضع علامة ✔ في الخانة الصغيرة أمام الصفحة أو الصفحات التي تريد تغيير خلفيتها، ثم عيّن صورة من معرض الهاتف. لكل صفحة خلفيتها المستقلة، ويمكنك تغيير خلفية أي صفحة أو إزالتها دون غيرها.",
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-            )
-            Spacer(Modifier.height(12.dp))
+        }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "مجموعة الخلفيات الإسلامية المولّدة (انقر لتطبيقها على الصفحات المحددة أو معاينتها):",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            AppBackgroundStore.builtInBackgrounds.forEach { item ->
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .width(74.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable {
+                            if (selectedPages.isEmpty()) {
+                                AppBackgroundStore.rotateHomeBackground()
+                                message = "تم تفعيل «${item.title}» في الخلفيات المتجددة؛ حدّد صفحات من القائمة لتثبيتها عليها."
+                            } else {
+                                selectedPages.forEach { key ->
+                                    AppBackgroundStore.clearPage(context, key)
+                                    AppBackgroundStore.setBuiltInForPage(context, key, item.id)
+                                }
+                                message = "تم تعيين الخلفية الإسلامية «${item.title}» لـ ${selectedPages.size} صفحة"
+                            }
+                        }
+                        .padding(4.dp)
+                ) {
+                    Image(
+                        painter = painterResource(id = item.drawableRes),
+                        contentDescription = item.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(width = 64.dp, height = 88.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .border(
+                                width = 1.dp,
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        item.title,
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+        Spacer(Modifier.height(10.dp))
+
+        // رأس قائمة التخصيص القابل للطي لتجنّب إطالة الصفحة بدون داعٍ
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                .clickable { pagesExpanded = !pagesExpanded }
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "تخصيص خلفية كل صفحة من معرض الهاتف",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    "${AppBackgroundStore.pages.size} صفحة · $customCount صورة مخصصة مفعّلة",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Icon(
+                imageVector = if (pagesExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = if (pagesExpanded) "طي القائمة" else "فتح القائمة"
+            )
+        }
+
+        AnimatedVisibility(
+            visible = pagesExpanded,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            Column(modifier = Modifier.padding(top = 12.dp)) {
                 Button(
                     onClick = { chooseFor(selectedPages.toList()) },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
                 ) {
                     Icon(Icons.Default.AddPhotoAlternate, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        if (selectedPages.isEmpty()) "تعيين صورة للصفحات المحددة"
+                        if (selectedPages.isEmpty()) "اختيار صورة من المعرض للصفحات المحددة"
                         else "تعيين صورة لـ ${selectedPages.size} صفحة",
                         fontSize = 13.sp
                     )
                 }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = {
-                    AppBackgroundStore.pages.forEach { page ->
-                        AppBackgroundStore.setPageEnabled(context, page.key, true)
-                    }
-                }) { Text("تحديد الكل", fontSize = 12.sp) }
-                TextButton(onClick = {
-                    AppBackgroundStore.pages.forEach { page ->
-                        AppBackgroundStore.setPageEnabled(context, page.key, false)
-                    }
-                }) { Text("إلغاء التحديد", fontSize = 12.sp) }
-                TextButton(onClick = {
-                    AppBackgroundStore.clearAll(context)
-                    message = "تمت إزالة خلفيات جميع الصفحات"
-                }) { Text("إزالة الكل", fontSize = 12.sp) }
-            }
-
-            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-
-            AppBackgroundStore.pages.forEach { page ->
-                val hasImage = AppBackgroundStore.hasImage(context, page.key)
-                val checked = page.key in selectedPages
-                PageBackgroundRow(
-                    title = page.title,
-                    hasImage = hasImage,
-                    checked = checked,
-                    imagePath = if (hasImage) AppBackgroundStore.imagePath(context, page.key) else null,
-                    onToggle = { value ->
-                        if (value && !hasImage) {
-                            chooseFor(listOf(page.key))
-                        } else {
-                            AppBackgroundStore.setPageEnabled(context, page.key, value)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = {
+                        AppBackgroundStore.pages.forEach { page ->
+                            AppBackgroundStore.setPageEnabled(context, page.key, true)
                         }
-                    },
-                    onPick = { chooseFor(listOf(page.key)) },
-                    onClear = {
-                        AppBackgroundStore.clearPage(context, page.key)
-                        message = "تمت إزالة خلفية «${page.title}»"
-                    }
-                )
+                    }) { Text("تحديد الكل", fontSize = 12.sp) }
+                    TextButton(onClick = {
+                        AppBackgroundStore.pages.forEach { page ->
+                            AppBackgroundStore.setPageEnabled(context, page.key, false)
+                        }
+                    }) { Text("إلغاء التحديد", fontSize = 12.sp) }
+                    TextButton(onClick = {
+                        AppBackgroundStore.clearAll(context)
+                        message = "تمت إزالة الصور المخصصة والعودة للخلفيات الإسلامية التلقائية"
+                    }) { Text("استعادة التلقائي", fontSize = 12.sp) }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+                AppBackgroundStore.pages.forEach { page ->
+                    val hasImage = AppBackgroundStore.hasImage(context, page.key)
+                    val checked = page.key in selectedPages
+                    PageBackgroundRow(
+                        title = page.title,
+                        hasImage = hasImage,
+                        checked = checked,
+                        imagePath = if (hasImage) AppBackgroundStore.imagePath(context, page.key) else null,
+                        onToggle = { value ->
+                            if (value && !hasImage) {
+                                chooseFor(listOf(page.key))
+                            } else {
+                                AppBackgroundStore.setPageEnabled(context, page.key, value)
+                            }
+                        },
+                        onPick = { chooseFor(listOf(page.key)) },
+                        onClear = {
+                            AppBackgroundStore.clearPage(context, page.key)
+                            message = "تمت إزالة الخلفية المخصصة لـ «${page.title}»"
+                        }
+                    )
+                }
             }
+        }
 
-            Spacer(Modifier.height(8.dp))
-            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-            Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+        Spacer(Modifier.height(10.dp))
 
-            Text("درجة التعتيم فوق الخلفية: $scrim%", fontSize = 13.sp)
-            Slider(
-                value = scrim.toFloat(),
-                onValueChange = { value ->
-                    scrim = value.toInt()
-                    AppBackgroundStore.setScrimPercent(context, scrim)
-                },
-                valueRange = 0f..85f,
-                steps = 16
-            )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("درجة التعتيم فوق الخلفية", fontSize = 13.sp, fontWeight = FontWeight.Medium)
             Text(
-                "كلما زادت درجة التعتيم صار النص أوضح فوق الصورة.",
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                "$scrim%",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
             )
+        }
+        Slider(
+            value = scrim.toFloat(),
+            onValueChange = { value ->
+                scrim = value.toInt()
+                AppBackgroundStore.setScrimPercent(context, scrim)
+            },
+            valueRange = 0f..85f,
+            steps = 16
+        )
+        Text(
+            "كلما زادت درجة التعتيم صار النص أوضح فوق الصورة.",
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+        )
 
-            message?.let {
-                Spacer(Modifier.height(8.dp))
-                Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
-            }
+        message?.let {
+            Spacer(Modifier.height(8.dp))
+            Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
         }
     }
 }
@@ -448,19 +1087,20 @@ private fun PageBackgroundRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Checkbox(
             checked = checked,
-            onCheckedChange = onToggle,
-            modifier = Modifier.size(36.dp)
+            onCheckedChange = onToggle
         )
         Spacer(Modifier.width(4.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(title, fontSize = 14.sp)
             Text(
-                if (hasImage) (if (checked) "خلفية مفعّلة" else "صورة محفوظة · غير مفعّلة") else "بدون صورة",
+                if (hasImage) (if (checked) "صورة مخصصة مفعّلة" else "صورة محفوظة · غير مفعّلة")
+                else "خلفية إسلامية تلقائية",
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
@@ -479,7 +1119,7 @@ private fun PageBackgroundRow(
                 Spacer(Modifier.width(4.dp))
             }
         }
-        IconButton(onClick = onPick, modifier = Modifier.size(38.dp)) {
+        IconButton(onClick = onPick) {
             Icon(
                 Icons.Default.AddPhotoAlternate,
                 contentDescription = "تعيين صورة",
@@ -487,7 +1127,7 @@ private fun PageBackgroundRow(
             )
         }
         if (hasImage) {
-            IconButton(onClick = onClear, modifier = Modifier.size(38.dp)) {
+            IconButton(onClick = onClear) {
                 Icon(
                     Icons.Default.DeleteOutline,
                     contentDescription = "إزالة الخلفية",
@@ -500,12 +1140,12 @@ private fun PageBackgroundRow(
 
 private fun loadThumbnail(path: String): ImageBitmap? {
     return runCatching {
-        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        android.graphics.BitmapFactory.decodeFile(path, bounds)
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(path, bounds)
         var sample = 1
         while (bounds.outWidth / sample > 160 || bounds.outHeight / sample > 160) sample *= 2
-        val options = android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }
-        android.graphics.BitmapFactory.decodeFile(path, options)?.asImageBitmap()
+        val options = BitmapFactory.Options().apply { inSampleSize = sample }
+        BitmapFactory.decodeFile(path, options)?.asImageBitmap()
     }.getOrNull()
 }
 
@@ -541,54 +1181,45 @@ private fun PageColorsCard(
         0xFF101010L to "أسود"
     )
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    SettingsCardShell(
+        title = "ألوان الصفحات وألوان الخطوط",
+        icon = Icons.Default.ColorLens
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Text(
-                "ألوان الصفحات وألوان الخطوط",
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "اختر لون خلفية الصفحات ولون الخط. تُطبَّق الألوان فورًا على كل صفحات التطبيق، ويمكنك العودة للون الافتراضي في أي وقت.",
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-            )
+        Text(
+            "اختر لونًا ثابتًا لخلفية الصفحات ولون الخط، أو اتركه افتراضيًا لعرض الخلفيات الإسلامية.",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
 
-            Spacer(Modifier.height(14.dp))
-            Text("لون خلفية الصفحات", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(8.dp))
-            ColorSwatchRow(
-                swatches = pageSwatches,
-                selected = pageColor,
-                onSelect = onPageColorChange
-            )
+        Spacer(Modifier.height(14.dp))
+        Text("لون خلفية الصفحات", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(8.dp))
+        ColorSwatchRow(
+            swatches = pageSwatches,
+            selected = pageColor,
+            onSelect = onPageColorChange
+        )
 
-            Spacer(Modifier.height(16.dp))
-            Text("لون الخط", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(8.dp))
-            ColorSwatchRow(
-                swatches = fontSwatches,
-                selected = fontColor,
-                onSelect = onFontColorChange
-            )
+        Spacer(Modifier.height(16.dp))
+        Text("لون الخط", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(8.dp))
+        ColorSwatchRow(
+            swatches = fontSwatches,
+            selected = fontColor,
+            onSelect = onFontColorChange
+        )
 
-            Spacer(Modifier.height(14.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(onClick = {
-                    onPageColorChange(0L)
-                    onFontColorChange(0L)
-                }) {
-                    Icon(Icons.Default.RestartAlt, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text("استعادة الألوان الافتراضية")
-                }
-            }
+        Spacer(Modifier.height(14.dp))
+        OutlinedButton(
+            onClick = {
+                onPageColorChange(0L)
+                onFontColorChange(0L)
+            },
+            modifier = Modifier.heightIn(min = 48.dp)
+        ) {
+            Icon(Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("استعادة الألوان الافتراضية")
         }
     }
 }
@@ -612,7 +1243,9 @@ private fun ColorSwatchRow(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .width(64.dp)
+                    .heightIn(min = 48.dp)
                     .clickable { onSelect(value) }
+                    .padding(vertical = 2.dp)
             ) {
                 Box(
                     modifier = Modifier
@@ -641,7 +1274,7 @@ private fun ColorSwatchRow(
                     label,
                     fontSize = 10.sp,
                     maxLines = 1,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f)
                 )
             }
         }
@@ -671,69 +1304,65 @@ private fun FloatingTasbeehCard() {
         runCatching { context.stopService(Intent(context, FloatingTasbeehService::class.java)) }
     }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    SettingsCardShell(
+        title = "المسبحة العائمة فوق الشاشة",
+        icon = Icons.Default.Layers,
+        badge = if (enabled) "مفعّلة" else "متوقفة"
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Text(
-                "المسبحة العائمة فوق الشاشة",
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "مسبحة تظهر فوق شاشة الهاتف حتى وأنت خارج التطبيق. انقر على البطاقة للتسبيح، اسحبها لأي مكان، وتهتزّ عند إكمال العدد. لإخفائها اضغط زر ✕.",
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-            )
-            Spacer(Modifier.height(12.dp))
+        Text(
+            "مسبحة تظهر فوق شاشة الهاتف حتى وأنت خارج التطبيق. انقر للتسبيح، اسحبها لأي مكان، أو كبّرها وصغّرها بإصبعين.",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(12.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("تشغيل المسبحة العائمة", fontSize = 15.sp)
-                Switch(
-                    checked = enabled,
-                    onCheckedChange = { value ->
-                        if (value) {
-                            overlayGranted = FloatingTasbeehService.canDrawOverlays(context)
-                            if (!overlayGranted) {
-                                runCatching {
-                                    context.startActivity(
-                                        Intent(
-                                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                            Uri.parse("package:${context.packageName}")
-                                        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("تشغيل المسبحة العائمة", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            Switch(
+                checked = enabled,
+                onCheckedChange = { value ->
+                    if (value) {
+                        overlayGranted = FloatingTasbeehService.canDrawOverlays(context)
+                        if (!overlayGranted) {
+                            runCatching {
+                                context.startActivity(
+                                    Intent(
+                                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                        Uri.parse("package:${context.packageName}")
                                     )
-                                }
-                            } else {
-                                FloatingTasbeehService.setEnabled(context, true)
-                                start()
-                                enabled = true
+                                )
                             }
                         } else {
-                            FloatingTasbeehService.setEnabled(context, false)
-                            stop()
-                            enabled = false
+                            FloatingTasbeehService.setEnabled(context, true)
+                            start()
+                            enabled = true
                         }
+                    } else {
+                        FloatingTasbeehService.setEnabled(context, false)
+                        stop()
+                        enabled = false
                     }
-                )
-            }
+                }
+            )
+        }
 
-            if (!overlayGranted) {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "إذن «الظهور فوق التطبيقات» غير ممنوح، وهو مطلوب لعرض المسبحة.",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.error
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = {
+        if (!overlayGranted) {
+            Spacer(Modifier.height(8.dp))
+            PermissionStatusRow(
+                label = "إذن الظهور فوق التطبيقات",
+                granted = false,
+                grantedText = "ممنوح",
+                deniedText = "مطلوب لعرض المسبحة"
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = {
                     runCatching {
                         context.startActivity(
                             Intent(
@@ -742,15 +1371,20 @@ private fun FloatingTasbeehCard() {
                             )
                         )
                     }
-                }) {
-                    Icon(Icons.Default.Layers, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text("منح إذن الظهور فوق التطبيقات")
-                }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+            ) {
+                Icon(Icons.Default.Layers, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("منح إذن الظهور فوق التطبيقات")
             }
+        }
 
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = {
+        Spacer(Modifier.height(10.dp))
+        OutlinedButton(
+            onClick = {
                 runCatching {
                     context.startActivity(
                         Intent(
@@ -759,18 +1393,21 @@ private fun FloatingTasbeehCard() {
                         )
                     )
                 }
-            }) {
-                Icon(Icons.Default.BatteryChargingFull, contentDescription = null)
-                Spacer(Modifier.width(6.dp))
-                Text("استثناء التطبيق من تحسين البطارية")
-            }
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "الاستثناء يمنع النظام من إيقاف المسبحة أو الأذكار الصوتية عند قفل الشاشة.",
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-            )
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+        ) {
+            Icon(Icons.Default.BatteryChargingFull, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("استثناء التطبيق من تحسين البطارية")
         }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "الاستثناء يمنع النظام من إيقاف المسبحة أو الأذكار الصوتية عند قفل الشاشة.",
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+        )
     }
 }
 
@@ -785,57 +1422,50 @@ private fun DeveloperPagesCard(
     onBlog: () -> Unit,
     onPlatform: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    SettingsCardShell(
+        title = "صفحات المطور",
+        icon = Icons.Default.Person
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Text(
-                "صفحات المطور",
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "محمد الحزمي — دعم المطور وقناته ومدونته ومنصته",
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-            )
-            Spacer(Modifier.height(8.dp))
+        Text(
+            "محمد الحزمي — دعم المطور وقناته ومدونته ومنصته",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(10.dp))
 
-            DeveloperPageRow(
-                icon = Icons.Default.Favorite,
-                title = "دعم المطور",
-                subtitle = "محمد الحزمي · محفظة جيب",
-                onClick = onSupportDeveloper
-            )
-            DeveloperPageRow(
-                icon = Icons.Default.Verified,
-                title = "قناة المطور على تليجرام",
-                subtitle = "t.me/moh_alymani1",
-                onClick = onTelegram
-            )
-            DeveloperPageRow(
-                icon = Icons.Default.Article,
-                title = "مدونة المطور",
-                subtitle = "mohammedalhzmi.blogspot.com",
-                onClick = onBlog
-            )
-            DeveloperPageRow(
-                icon = Icons.Default.AutoAwesome,
-                title = "منصة المطور محمد الحزمي",
-                subtitle = "منصة الذكاء الاصطناعي",
-                onClick = onPlatform
-            )
-        }
+        DeveloperPageRow(
+            icon = Icons.Default.Favorite,
+            title = "دعم المطور",
+            subtitle = "محمد الحزمي · محفظة جيب",
+            onClick = onSupportDeveloper
+        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+        DeveloperPageRow(
+            icon = Icons.Default.Verified,
+            title = "قناة المطور على تليجرام",
+            subtitle = "t.me/moh_alymani1",
+            onClick = onTelegram
+        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+        DeveloperPageRow(
+            icon = Icons.Default.Article,
+            title = "مدونة المطور",
+            subtitle = "mohammedalhzmi.blogspot.com",
+            onClick = onBlog
+        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+        DeveloperPageRow(
+            icon = Icons.Default.AutoAwesome,
+            title = "منصة المطور محمد الحزمي",
+            subtitle = "منصة الذكاء الاصطناعي",
+            onClick = onPlatform
+        )
     }
 }
 
 @Composable
 private fun DeveloperPageRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     title: String,
     subtitle: String,
     onClick: () -> Unit
@@ -843,32 +1473,45 @@ private fun DeveloperPageRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 52.dp)
             .clickable(onClick = onClick)
-            .padding(vertical = 12.dp),
+            .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(22.dp)
-        )
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             Text(
                 subtitle,
                 fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
             )
         }
         Icon(
             Icons.Default.ChevronLeft,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
         )
     }
 }
+
+/* ------------------------------------------------------------------ */
+/*  إشعارات الأذكار التلقائية                                         */
+/* ------------------------------------------------------------------ */
 
 @Composable
 private fun AzkarNotificationsCard() {
@@ -888,126 +1531,123 @@ private fun AzkarNotificationsCard() {
         minuteText = time.second.toString()
     }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    SettingsCardShell(
+        title = "إشعارات الأذكار التلقائية",
+        icon = Icons.Default.Schedule,
+        badge = if (enabled) "نشط" else "متوقف"
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Text(
-                "إشعارات الأذكار التلقائية",
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                "يعمل التطبيق على تذكيرك بالأذكار تلقائيًا في الوقت الذي تحدده، حتى لو كان مغلقًا.",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            "يعمل التطبيق على تذكيرك بالأذكار تلقائيًا في الوقت الذي تحدده، حتى لو كان مغلقًا.",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(12.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("تفعيل الإشعارات الصوتية", fontSize = 15.sp)
-                Switch(
-                    checked = enabled,
-                    onCheckedChange = { checked ->
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("تفعيل الإشعارات الصوتية التلقائية", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            Switch(
+                checked = enabled,
+                onCheckedChange = { checked ->
+                    scope.launch {
+                        prefs.setAutoReminders(checked)
+                        AthkarReminderScheduler.sync(
+                            context, checked, interval, time.first, time.second
+                        )
+                        message = if (checked) "تم تفعيل الإشعارات التلقائية" else "تم إيقاف الإشعارات التلقائية"
+                    }
+                }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+        Text("التكرار كل (دقيقة)", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(15, 30, 60, 120).forEach { value ->
+                FilterChip(
+                    selected = interval == value,
+                    onClick = {
                         scope.launch {
-                            prefs.setAutoReminders(checked)
+                            prefs.setReminderInterval(value)
                             AthkarReminderScheduler.sync(
-                                context, checked, interval, time.first, time.second
+                                context, enabled, value, time.first, time.second
                             )
-                            message = if (checked) "تم تفعيل الإشعارات التلقائية" else "تم إيقاف الإشعارات التلقائية"
+                            message = "تم ضبط التكرار كل $value دقيقة"
+                        }
+                    },
+                    label = { Text("$value", fontSize = 12.sp) }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+        Text("وقت التشغيل اليومي (إدخال يدوي)", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = hourText,
+                onValueChange = { hourText = it.filter(Char::isDigit).take(2) },
+                label = { Text("الساعة") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f)
+            )
+            Text(" : ", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            OutlinedTextField(
+                value = minuteText,
+                onValueChange = { minuteText = it.filter(Char::isDigit).take(2) },
+                label = { Text("الدقيقة") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = {
+                    val h = hourText.toIntOrNull()
+                    val m = minuteText.toIntOrNull()
+                    if (h == null || m == null || h !in 0..23 || m !in 0..59) {
+                        message = "أدخل وقتًا صحيحًا: الساعة 0-23 والدقيقة 0-59"
+                    } else {
+                        scope.launch {
+                            prefs.setAzkarTime(h, m)
+                            prefs.setAutoReminders(true)
+                            AthkarReminderScheduler.sync(context, true, interval, h, m)
+                            message = "تم حفظ الوقت ${String.format("%02d:%02d", h, m)} وتفعيل الإشعارات"
                         }
                     }
-                )
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 48.dp)
+            ) {
+                Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("حفظ وتفعيل")
             }
-
-            Spacer(modifier = Modifier.height(12.dp))
-            Text("التكرار كل (دقيقة)", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(15, 30, 60, 120).forEach { value ->
-                    FilterChip(
-                        selected = interval == value,
-                        onClick = {
-                            scope.launch {
-                                prefs.setReminderInterval(value)
-                                AthkarReminderScheduler.sync(
-                                    context, enabled, value, time.first, time.second
-                                )
-                                message = "تم ضبط التكرار كل $value دقيقة"
-                            }
-                        },
-                        label = { Text("$value", fontSize = 12.sp) }
-                    )
-                }
+            OutlinedButton(
+                onClick = {
+                    AthkarReminderScheduler.runOnceNow(context)
+                    message = "تم إرسال إشعار تجريبي بعد لحظات"
+                },
+                modifier = Modifier.heightIn(min = 48.dp)
+            ) {
+                Icon(Icons.Default.NotificationsActive, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("إشعار تجريبي")
             }
-
-            Spacer(modifier = Modifier.height(14.dp))
-            Text("وقت التشغيل اليومي (إدخال يدوي)", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = hourText,
-                    onValueChange = { hourText = it.filter(Char::isDigit).take(2) },
-                    label = { Text("الساعة") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.weight(1f)
-                )
-                Text(" : ", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                OutlinedTextField(
-                    value = minuteText,
-                    onValueChange = { minuteText = it.filter(Char::isDigit).take(2) },
-                    label = { Text("الدقيقة") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.weight(1f)
-                )
-            }
+        }
+        message?.let {
             Spacer(modifier = Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = {
-                        val h = hourText.toIntOrNull()
-                        val m = minuteText.toIntOrNull()
-                        if (h == null || m == null || h !in 0..23 || m !in 0..59) {
-                            message = "أدخل وقتًا صحيحًا: الساعة 0-23 والدقيقة 0-59"
-                        } else {
-                            scope.launch {
-                                prefs.setAzkarTime(h, m)
-                                prefs.setAutoReminders(true)
-                                AthkarReminderScheduler.sync(context, true, interval, h, m)
-                                message = "تم حفظ الوقت ${String.format("%02d:%02d", h, m)} وتفعيل الإشعارات"
-                            }
-                        }
-                    }
-                ) {
-                    Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("حفظ وتفعيل")
-                }
-                OutlinedButton(
-                    onClick = {
-                        AthkarReminderScheduler.runOnceNow(context)
-                        message = "تم إرسال إشعار تجريبي بعد لحظات"
-                    }
-                ) {
-                    Icon(Icons.Default.NotificationsActive, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("إشعار تجريبي")
-                }
-            }
-            message?.let {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
-            }
+            Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
         }
     }
 }

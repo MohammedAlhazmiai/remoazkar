@@ -18,8 +18,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -180,10 +183,25 @@ class MainActivity : ComponentActivity() {
 
             val backStackEntry by navController.currentBackStackEntryAsState()
             val currentRoute = backStackEntry?.destination?.route
+            var previousRoute by rememberSaveable { mutableStateOf<String?>(null) }
+            LaunchedEffect(currentRoute) {
+                val prev = previousRoute
+                if (currentRoute == "home" && prev != null && prev != "home" && prev != "splash") {
+                    AppBackgroundStore.rotateHomeBackground()
+                }
+                if (currentRoute != null) {
+                    previousRoute = currentRoute
+                }
+            }
             val pageKey = AppBackgroundStore.pageKeyForRoute(currentRoute)
             val backgroundRevision = AppBackgroundStore.revision
-            val pageBackgroundEnabled = remember(backgroundRevision, pageKey) {
-                pageKey?.let { AppBackgroundStore.isEnabled(this@MainActivity, it) } == true
+            val hasCustomPageColor = preferences.pageColor != 0L
+            val pageBackgroundEnabled = remember(backgroundRevision, pageKey, hasCustomPageColor) {
+                AppBackgroundStore.shouldRenderBackgroundLayer(
+                    context = this@MainActivity,
+                    pageKey = pageKey,
+                    hasCustomPageColor = hasCustomPageColor
+                )
             }
 
             // مزامنة إشعارات الأذكار التلقائية (WorkManager + منبّه يومي بوقت يدوي)
@@ -237,7 +255,11 @@ class MainActivity : ComponentActivity() {
                     transparentBackground = pageBackgroundEnabled
                 ) {
                     Box(Modifier.fillMaxSize()) {
-                        AppBackgroundLayer(pageKey = pageKey, darkMode = darkMode)
+                        AppBackgroundLayer(
+                            pageKey = pageKey,
+                            darkMode = darkMode,
+                            hasCustomPageColor = hasCustomPageColor
+                        )
                         AppRoot(
                             navController = navController,
                             preferencesManager = preferencesManager,

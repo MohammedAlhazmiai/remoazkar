@@ -1,6 +1,9 @@
 package com.example.ui.screens
 
+import android.graphics.BitmapFactory
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -23,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -32,6 +36,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
+import com.example.data.AppBackgroundStore
 import com.example.data.HijriCalendar
 import com.example.data.HisnChapter
 import com.example.data.HisnRepository
@@ -117,21 +122,61 @@ fun HomeScreen(
                 .padding(padding)
                 .fillMaxSize()
         ) {
-            Image(
-                painter = painterResource(id = R.drawable.home_background),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
+            val bgRevision = AppBackgroundStore.revision
+            val customHomePath = remember(bgRevision) {
+                if (AppBackgroundStore.isEnabled(context, "home")) {
+                    AppBackgroundStore.imagePath(context, "home")
+                } else {
+                    null
+                }
+            }
+            val customBitmap = remember(customHomePath) {
+                customHomePath?.let { path ->
+                    runCatching {
+                        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        BitmapFactory.decodeFile(path, bounds)
+                        var sample = 1
+                        val longest = maxOf(bounds.outWidth, bounds.outHeight)
+                        while (longest / sample > 2200) sample *= 2
+                        BitmapFactory.decodeFile(
+                            path,
+                            BitmapFactory.Options().apply { inSampleSize = sample }
+                        )?.asImageBitmap()
+                    }.getOrNull()
+                }
+            }
+
+            if (customBitmap != null) {
+                Image(
+                    bitmap = customBitmap,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                val homeBgDrawable = AppBackgroundStore.currentHomeDrawable()
+                Crossfade(
+                    targetState = homeBgDrawable,
+                    animationSpec = tween(durationMillis = 600),
+                    label = "home_background_crossfade"
+                ) { resId ->
+                    Image(
+                        painter = painterResource(id = resId),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
                             listOf(
-                                Color(0x33112720),
-                                Color(0x50112720),
-                                Color(0x88111D18)
+                                Color(0x40112720),
+                                Color(0x5E112720),
+                                Color(0x90111D18)
                             )
                         )
                     )
