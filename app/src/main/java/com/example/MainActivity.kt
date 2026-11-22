@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,6 +34,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.data.AthkarReminderScheduler
+import com.example.data.AppBackgroundStore
 import com.example.data.AppLocale
 import com.example.data.HisnRepository
 import com.example.data.LocalAppLanguage
@@ -44,6 +46,7 @@ import com.example.data.PreferencesSnapshot
 import com.example.data.QuranRepository
 import com.example.data.ReminderScheduler
 import com.example.data.TtsManager
+import com.example.ui.components.AppBackgroundLayer
 import com.example.ui.components.AppSettingsDrawer
 import com.example.ui.components.SmartReaderBus
 import com.example.ui.components.SmartReaderFab
@@ -147,6 +150,12 @@ class MainActivity : ComponentActivity() {
             val khatmahPagesDone = preferences.khatmahPagesDone
             val khatmahActive = preferences.khatmahActive
 
+            // قراءة رقم الإصدار تجعل الواجهة تُعيد الرسم فور اختيار/إزالة صورة الخلفية.
+            val backgroundRevision = AppBackgroundStore.revision
+            val backgroundEnabled = remember(backgroundRevision) {
+                AppBackgroundStore.isEnabled(this@MainActivity)
+            }
+
             // مزامنة إشعارات الأذكار التلقائية (WorkManager + منبّه يومي بوقت يدوي)
             LaunchedEffect(autoReminders, reminderInterval, azkarTime) {
                 try {
@@ -192,24 +201,28 @@ class MainActivity : ComponentActivity() {
             ) {
                 MyApplicationTheme(
                     darkTheme = darkMode,
-                    fontFamily = AppFonts.familyFor(fontFamilyIndex)
+                    fontFamily = AppFonts.familyFor(fontFamilyIndex),
+                    transparentBackground = backgroundEnabled
                 ) {
-                    AppRoot(
-                        preferencesManager = preferencesManager,
-                        favorites = favorites,
-                        darkMode = darkMode,
-                        speechRate = speechRate,
-                        speechPitch = speechPitch,
-                        notificationSound = notificationSound,
-                        fontSizeIndex = fontSizeIndex,
-                        language = language,
-                        fontFamilyIndex = fontFamilyIndex,
-                        tashkeel = tashkeel,
-                        khatmahDays = khatmahDays,
-                        khatmahStart = khatmahStart,
-                        khatmahPagesDone = khatmahPagesDone,
-                        khatmahActive = khatmahActive
-                    )
+                    Box(Modifier.fillMaxSize()) {
+                        AppBackgroundLayer(darkMode = darkMode)
+                        AppRoot(
+                            preferencesManager = preferencesManager,
+                            favorites = favorites,
+                            darkMode = darkMode,
+                            speechRate = speechRate,
+                            speechPitch = speechPitch,
+                            notificationSound = notificationSound,
+                            fontSizeIndex = fontSizeIndex,
+                            language = language,
+                            fontFamilyIndex = fontFamilyIndex,
+                            tashkeel = tashkeel,
+                            khatmahDays = khatmahDays,
+                            khatmahStart = khatmahStart,
+                            khatmahPagesDone = khatmahPagesDone,
+                            khatmahActive = khatmahActive
+                        )
+                    }
                 }
             }
         }
@@ -483,6 +496,10 @@ private fun AppRoot(
                         onFontSizeChange = { index ->
                             scope.launch { preferencesManager.setFontSize(index) }
                         },
+                        onSupportDeveloper = { navController.navigate("support_developer") },
+                        onTelegram = { navController.navigate("dev_link/telegram") },
+                        onBlog = { navController.navigate("dev_link/blog") },
+                        onPlatform = { navController.navigate("dev_link/platform") },
                         onBackClick = { navController.popBackStack() }
                     )
                 }

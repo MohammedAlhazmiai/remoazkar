@@ -7,6 +7,9 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,8 +20,12 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -26,9 +33,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.example.data.AppBackgroundStore
 import com.example.data.AthkarReminderScheduler
 import com.example.data.PreferencesManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,6 +53,10 @@ fun AdvancedSettingsScreen(
     onToggleNotificationSound: (Boolean) -> Unit,
     fontSizeIndex: Int,
     onFontSizeChange: (Int) -> Unit,
+    onSupportDeveloper: () -> Unit = {},
+    onTelegram: () -> Unit = {},
+    onBlog: () -> Unit = {},
+    onPlatform: () -> Unit = {},
     onBackClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -86,6 +100,11 @@ fun AdvancedSettingsScreen(
                         }
                     }
                 }
+            }
+
+            // خلفية التطبيق من معرض الهاتف
+            item {
+                AppBackgroundCard()
             }
 
             // Font Size Control
@@ -219,7 +238,238 @@ fun AdvancedSettingsScreen(
             item {
                 AzkarNotificationsCard()
             }
+
+            // صفحات المطور — منقولة من تطبيق ريمو بلاير
+            item {
+                DeveloperPagesCard(
+                    onSupportDeveloper = onSupportDeveloper,
+                    onTelegram = onTelegram,
+                    onBlog = onBlog,
+                    onPlatform = onPlatform
+                )
+            }
         }
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  خلفية التطبيق                                                      */
+/* ------------------------------------------------------------------ */
+
+@Composable
+private fun AppBackgroundCard() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var revision by remember { mutableIntStateOf(AppBackgroundStore.revision) }
+    var enabled by remember { mutableStateOf(AppBackgroundStore.isEnabled(context)) }
+    var hasImage by remember { mutableStateOf(AppBackgroundStore.imagePath(context) != null) }
+    var scrim by remember { mutableIntStateOf(AppBackgroundStore.scrimPercent(context)) }
+    var message by remember { mutableStateOf<String?>(null) }
+
+    val picker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val ok = withContext(Dispatchers.IO) { AppBackgroundStore.save(context, uri) }
+                revision = AppBackgroundStore.revision
+                hasImage = AppBackgroundStore.imagePath(context) != null
+                enabled = AppBackgroundStore.isEnabled(context)
+                message = if (ok) "تم تعيين الصورة خلفيةً لصفحات التطبيق" else "تعذّر قراءة الصورة، جرّب صورة أخرى"
+            }
+        }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                "خلفية التطبيق",
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "اختر صورة من معرض الهاتف لتظهر خلف جميع صفحات التطبيق، ويمكنك تغييرها أو إزالتها في أي وقت.",
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
+            Spacer(Modifier.height(14.dp))
+
+            if (hasImage) {
+                val path = remember(revision) { AppBackgroundStore.imagePath(context) }
+                val preview = remember(path) {
+                    runCatching {
+                        android.graphics.BitmapFactory.decodeFile(path)?.asImageBitmap()
+                    }.getOrNull()
+                }
+                if (preview != null) {
+                    Image(
+                        bitmap = preview,
+                        contentDescription = "معاينة الخلفية",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(130.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                    )
+                    Spacer(Modifier.height(14.dp))
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("تفعيل الخلفية", fontSize = 15.sp)
+                    Switch(
+                        checked = enabled,
+                        onCheckedChange = { value ->
+                            AppBackgroundStore.setEnabled(context, value)
+                            enabled = value
+                            revision = AppBackgroundStore.revision
+                        }
+                    )
+                }
+
+                Text("درجة التعتيم: $scrim%", fontSize = 13.sp)
+                Slider(
+                    value = scrim.toFloat(),
+                    onValueChange = { value ->
+                        scrim = value.toInt()
+                        AppBackgroundStore.setScrimPercent(context, scrim)
+                    },
+                    valueRange = 0f..85f,
+                    steps = 16
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(onClick = { picker.launch("image/*") }) {
+                    Icon(Icons.Default.AddPhotoAlternate, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (hasImage) "تغيير الصورة" else "رفع صورة من الهاتف")
+                }
+                if (hasImage) {
+                    OutlinedButton(onClick = {
+                        AppBackgroundStore.clear(context)
+                        revision = AppBackgroundStore.revision
+                        hasImage = false
+                        enabled = false
+                        message = "تمت إزالة الخلفية"
+                    }) {
+                        Icon(Icons.Default.DeleteOutline, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("إزالة")
+                    }
+                }
+            }
+
+            message?.let {
+                Spacer(Modifier.height(8.dp))
+                Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+            }
+        }
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  صفحات المطور                                                       */
+/* ------------------------------------------------------------------ */
+
+@Composable
+private fun DeveloperPagesCard(
+    onSupportDeveloper: () -> Unit,
+    onTelegram: () -> Unit,
+    onBlog: () -> Unit,
+    onPlatform: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                "صفحات المطور",
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "محمد الحزمي — دعم المطور وقناته ومدونته ومنصته",
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
+            Spacer(Modifier.height(8.dp))
+
+            DeveloperPageRow(
+                icon = Icons.Default.Favorite,
+                title = "دعم المطور",
+                subtitle = "محمد الحزمي · محفظة جيب",
+                onClick = onSupportDeveloper
+            )
+            DeveloperPageRow(
+                icon = Icons.Default.Verified,
+                title = "قناة المطور على تليجرام",
+                subtitle = "t.me/moh_alymani1",
+                onClick = onTelegram
+            )
+            DeveloperPageRow(
+                icon = Icons.Default.Article,
+                title = "مدونة المطور",
+                subtitle = "mohammedalhzmi.blogspot.com",
+                onClick = onBlog
+            )
+            DeveloperPageRow(
+                icon = Icons.Default.AutoAwesome,
+                title = "منصة المطور محمد الحزمي",
+                subtitle = "منصة الذكاء الاصطناعي",
+                onClick = onPlatform
+            )
+        }
+    }
+}
+
+@Composable
+private fun DeveloperPageRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                subtitle,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
+        }
+        Icon(
+            Icons.Default.ChevronLeft,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+        )
     }
 }
 

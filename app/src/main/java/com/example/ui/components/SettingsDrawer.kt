@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FormatSize
@@ -325,6 +326,12 @@ fun AppSettingsDrawer(
                         icon = Icons.Default.Settings,
                         title = tr("advanced_settings"),
                         value = "الصوت · الإشعارات · الخط",
+                        onClick = { close(); onAdvancedSettings() }
+                    )
+                    DrawerRow(
+                        icon = Icons.Default.Image,
+                        title = "خلفية التطبيق",
+                        value = "اختر صورة من معرض الهاتف",
                         onClick = { close(); onAdvancedSettings() }
                     )
 

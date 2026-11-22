@@ -9,6 +9,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 
@@ -66,9 +67,11 @@ fun MyApplicationTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
     fontFamily: FontFamily = AppFonts.Default,
+    /** عند تفعيل خلفية المستخدم نجعل لون الخلفية شفافًا حتى تظهر الصورة خلف كل الصفحات. */
+    transparentBackground: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-  val colorScheme =
+  val baseScheme =
       when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
           val context = LocalContext.current
@@ -76,6 +79,18 @@ fun MyApplicationTheme(
         }
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
+      }
+
+  val colorScheme =
+      if (transparentBackground) {
+        baseScheme.copy(
+            background = Color.Transparent,
+            // أسطح البطاقات تبقى شبه معتمة لضمان وضوح النصوص فوق الصورة.
+            surface = baseScheme.surface.copy(alpha = 0.94f),
+            surfaceVariant = baseScheme.surfaceVariant.copy(alpha = 0.94f),
+        )
+      } else {
+        baseScheme
       }
 
   MaterialTheme(
