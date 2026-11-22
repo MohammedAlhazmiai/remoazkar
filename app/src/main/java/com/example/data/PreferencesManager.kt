@@ -39,7 +39,11 @@ data class PreferencesSnapshot(
     val khatmahDays: Int = 30,
     val khatmahStart: Long = 0L,
     val khatmahPagesDone: Int = 0,
-    val khatmahActive: Boolean = false
+    val khatmahActive: Boolean = false,
+    /** لون خلفية الصفحات بصيغة ARGB، و0 يعني اللون الافتراضي. */
+    val pageColor: Long = 0L,
+    /** لون الخطوط بصيغة ARGB، و0 يعني اللون الافتراضي. */
+    val fontColor: Long = 0L
 )
 
 data class TasbeehState(
@@ -121,6 +125,10 @@ class PreferencesManager(private val context: Context) {
         val KHATMAH_PAGES_DONE_KEY = intPreferencesKey("khatmah_pages_done")
         val KHATMAH_ACTIVE_KEY = booleanPreferencesKey("khatmah_active")
 
+        // --- ألوان الصفحات والخطوط ---
+        val PAGE_COLOR_KEY = longPreferencesKey("page_color_argb")
+        val FONT_COLOR_KEY = longPreferencesKey("font_color_argb")
+
         /** ملف SharedPreferences مرآة للقراءة المتزامنة من مستقبِل الإشعارات. */
         private const val MIRROR_FILE = "rim_mirror"
         private const val MIRROR_NOTIFICATION_SOUND = "notification_sound"
@@ -196,7 +204,9 @@ class PreferencesManager(private val context: Context) {
             khatmahDays = preferences[KHATMAH_DAYS_KEY] ?: 30,
             khatmahStart = preferences[KHATMAH_START_KEY] ?: 0L,
             khatmahPagesDone = preferences[KHATMAH_PAGES_DONE_KEY] ?: 0,
-            khatmahActive = preferences[KHATMAH_ACTIVE_KEY] ?: false
+            khatmahActive = preferences[KHATMAH_ACTIVE_KEY] ?: false,
+            pageColor = preferences[PAGE_COLOR_KEY] ?: 0L,
+            fontColor = preferences[FONT_COLOR_KEY] ?: 0L
         )
     }
 
@@ -304,6 +314,18 @@ class PreferencesManager(private val context: Context) {
     suspend fun setTashkeel(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[TASHKEEL_KEY] = enabled
+        }
+    }
+
+    suspend fun setPageColor(argb: Long) {
+        context.dataStore.edit { preferences ->
+            if (argb == 0L) preferences.remove(PAGE_COLOR_KEY) else preferences[PAGE_COLOR_KEY] = argb
+        }
+    }
+
+    suspend fun setFontColor(argb: Long) {
+        context.dataStore.edit { preferences ->
+            if (argb == 0L) preferences.remove(FONT_COLOR_KEY) else preferences[FONT_COLOR_KEY] = argb
         }
     }
 

@@ -62,7 +62,9 @@ fun HomeScreen(
     onNamesOfAllahClick: () -> Unit = {},
     onProphetDuasClick: () -> Unit = {},
     onAudioAzkarClick: () -> Unit = {},
-    onPathToSuccessClick: () -> Unit = {}
+    onPathToSuccessClick: () -> Unit = {},
+    onAgeCalculatorClick: () -> Unit = {},
+    onFloatingTasbeehClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val hijri = remember { HijriCalendar.today() }
@@ -201,6 +203,10 @@ fun HomeScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         FeatureCard("طريق الناجحين", "طريق الخلود ورحلة الآخرة", Icons.Default.Explore, Modifier.weight(1f), onPathToSuccessClick)
                         FeatureCard("الرفيق الروحي", "إرشاد يومي", Icons.Default.Favorite, Modifier.weight(1f), onSpiritualCompanionClick)
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FeatureCard("حاسبة العمر", "هجري وميلادي وتحويل التاريخ", Icons.Default.Calculate, Modifier.weight(1f), onAgeCalculatorClick)
+                        FeatureCard("المسبحة العائمة", "تظهر فوق شاشة الهاتف", Icons.Default.Layers, Modifier.weight(1f), onFloatingTasbeehClick)
                     }
                 }
             }

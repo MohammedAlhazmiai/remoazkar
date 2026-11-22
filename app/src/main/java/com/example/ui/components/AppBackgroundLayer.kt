@@ -16,16 +16,25 @@ import androidx.compose.ui.platform.LocalContext
 import com.example.data.AppBackgroundStore
 
 /**
- * طبقة خلفية التطبيق: تعرض الصورة التي اختارها المستخدم من معرض الهاتف خلف كل الشاشات،
- * مع طبقة تعتيم متدرّجة تحافظ على وضوح النصوص في الوضعين الفاتح والداكن.
+ * طبقة خلفية صفحة واحدة: تعرض الصورة التي اختارها المستخدم لهذه الصفحة تحديدًا،
+ * مع طبقة تعتيم متدرجة تحافظ على وضوح النصوص في الوضعين الفاتح والداكن.
  */
 @Composable
-fun AppBackgroundLayer(darkMode: Boolean, modifier: Modifier = Modifier) {
+fun AppBackgroundLayer(
+    pageKey: String?,
+    darkMode: Boolean,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
     val revision = AppBackgroundStore.revision
-    val enabled = AppBackgroundStore.isEnabled(context)
-    val path = remember(revision, enabled) {
-        if (enabled) AppBackgroundStore.imagePath(context) else null
+    val path = remember(revision, pageKey) {
+        pageKey?.let { key ->
+            if (AppBackgroundStore.isEnabled(context, key)) {
+                AppBackgroundStore.imagePath(context, key)
+            } else {
+                null
+            }
+        }
     }
     if (path == null) return
 
@@ -52,7 +61,6 @@ fun AppBackgroundLayer(darkMode: Boolean, modifier: Modifier = Modifier) {
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
         )
-        // تعتيم لضمان قراءة النصوص فوق الصورة.
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -61,7 +69,6 @@ fun AppBackgroundLayer(darkMode: Boolean, modifier: Modifier = Modifier) {
                     else Color.White.copy(alpha = scrim)
                 )
         )
-        // تدرّج خفيف أسفل الشاشة يعطي عمقًا بصريًا دون إخفاء الصورة.
         Box(
             modifier = Modifier
                 .fillMaxSize()

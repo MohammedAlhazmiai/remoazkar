@@ -8,6 +8,7 @@ import com.example.data.AthkarReminderScheduler
 import com.example.data.HumanAzkarScheduler
 import com.example.data.NotificationHelper
 import com.example.data.ReminderScheduler
+import com.example.service.FloatingTasbeehService
 
 /**
  * يعيد جدولة كل التذكيرات بعد إعادة تشغيل الجهاز أو تحديث التطبيق أو تغيير الوقت.
@@ -28,6 +29,16 @@ class BootReceiver : BroadcastReceiver() {
             ReminderScheduler.scheduleAll(context)
             AthkarReminderScheduler.syncFromMirror(context)
             HumanAzkarScheduler.rescheduleIfEnabled(context)
+            // إعادة إظهار المسبحة العائمة إن كان المستخدم قد فعّلها قبل إعادة التشغيل.
+            if (FloatingTasbeehService.isEnabled(context) && FloatingTasbeehService.canDrawOverlays(context)) {
+                runCatching {
+                    androidx.core.content.ContextCompat.startForegroundService(
+                        context,
+                        Intent(context, FloatingTasbeehService::class.java)
+                            .setAction(FloatingTasbeehService.ACTION_START)
+                    )
+                }
+            }
         }
     }
 }

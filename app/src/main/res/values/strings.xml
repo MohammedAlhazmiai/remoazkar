@@ -1,3 +1,9 @@
 <resources>
     <string name="app_name">ريمواذكار</string>
+    <string name="shortcut_age_short">حاسبة العمر</string>
+    <string name="shortcut_age_long">احسب عمرك هجريًا وميلاديًا</string>
+    <string name="shortcut_tasbeeh_short">المسبحة العائمة</string>
+    <string name="shortcut_tasbeeh_long">افتح المسبحة فوق شاشة الهاتف</string>
+    <string name="shortcut_audio_short">الأذكار الصوتية</string>
+    <string name="shortcut_audio_long">تشغيل الأذكار الصوتية البشرية</string>
 </resources>

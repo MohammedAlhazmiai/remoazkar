@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
 import android.media.MediaPlayer
@@ -15,74 +16,141 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import androidx.core.app.NotificationCompat
 import com.example.MainActivity
+import com.example.data.HumanAzkarAudioCatalog
 import java.util.Locale
 
+/**
+ * خدمة تشغيل الأذكار الصوتية في الخلفية.
+ *
+ * - التسجيلات البشرية تُشغَّل **بشكل تسلسلي متواصل**: عند انتهاء مقطع يبدأ المقطع التالي تلقائيًا
+ *   دون توقف، وتُحفظ حالة التشغيل في SharedPreferences حتى تستأنف الخدمة نفسها إن أعادها النظام.
+ * - الخدمة أمامية (Foreground) ولا تتوقف عند إزالة التطبيق من قائمة التطبيقات الحديثة
+ *   (`android:stopWithTask="false"` + `onTaskRemoved`)، وتعمل مع قفل الشاشة عبر WakeLock متجدّد.
+ */
 class AudioAzkarPlaybackService : Service() {
+
     private var tts: TextToSpeech? = null
     private var ready = false
     private var pendingText: String? = null
-    private var pendingTitle: String = "الأذكار الصوتية"
+    private var pendingTitle: String = DEFAULT_TITLE
     private var speechChunks: List<String> = emptyList()
     private var chunkIndex = 0
     private var mediaPlayer: MediaPlayer? = null
     private var wakeLock: PowerManager.WakeLock? = null
+
+    /** نوع التشغيل الحالي: تسجيل بشري أو نص عبر TTS. */
+    private var playingHuman = false
+    private var humanIndex = 0
+
+    private val prefs by lazy {
+        applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
 
     override fun onCreate() {
         super.onCreate()
         createChannel()
     }
 
+    /* ----------------------------- WakeLock ----------------------------- */
+
     private fun acquireWakeLock() {
+        val powerManager = getSystemService(POWER_SERVICE) as PowerManager
         if (wakeLock == null) {
-            val powerManager = getSystemService(POWER_SERVICE) as PowerManager
-            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "RimAzkar:AudioWakeLock").apply {
-                acquire(30 * 60 * 1000L)
-            }
+            wakeLock = powerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "RimAzkar:AudioWakeLock"
+            ).apply { setReferenceCounted(false) }
+        }
+        renewWakeLock()
+    }
+
+    /** يُجدَّد عند كل مقطع حتى لا ينتهي أثناء التشغيل الطويل. */
+    private fun renewWakeLock() {
+        try {
+            wakeLock?.acquire(60 * 60 * 1000L)
+        } catch (_: Exception) {
         }
     }
 
     private fun releaseWakeLock() {
         try {
-            if (wakeLock?.isHeld == true) {
-                wakeLock?.release()
-            }
-        } catch (_: Exception) {}
+            if (wakeLock?.isHeld == true) wakeLock?.release()
+        } catch (_: Exception) {
+        }
         wakeLock = null
     }
+
+    /* --------------------------- onStartCommand -------------------------- */
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             stopPlayback()
+            return START_NOT_STICKY
+        }
+
+        // إعادة تشغيل الخدمة من النظام بعد إيقافها (intent == null): نستأنف آخر حالة محفوظة.
+        if (intent == null) {
+            restoreFromPrefs()
             return START_STICKY
         }
-        pendingTitle = intent?.getStringExtra(EXTRA_TITLE) ?: "الأذكار الصوتية"
-        val audioResourceName = intent?.getStringExtra(EXTRA_AUDIO_RESOURCE_NAME)?.trim().orEmpty()
-        acquireWakeLock()
+
+        pendingTitle = intent.getStringExtra(EXTRA_TITLE)?.takeIf { it.isNotBlank() } ?: DEFAULT_TITLE
+        val audioResourceName = intent.getStringExtra(EXTRA_AUDIO_RESOURCE_NAME)?.trim().orEmpty()
+
         if (audioResourceName.isNotBlank()) {
+            // إذا كان التشغيل التسلسلي جاريًا بالفعل فلا نقطعه بطلب جديد من المنبّه الدوري.
+            if (playingHuman && mediaPlayer != null) {
+                return START_STICKY
+            }
+            acquireWakeLock()
             playHumanRecording(audioResourceName)
             return START_STICKY
         }
-        val text = intent?.getStringExtra(EXTRA_TEXT)?.trim().orEmpty()
+
+        val text = intent.getStringExtra(EXTRA_TEXT)?.trim().orEmpty()
         if (text.isBlank()) {
             releaseWakeLock()
             stopSelf(startId)
-            return START_STICKY
+            return START_NOT_STICKY
         }
+        acquireWakeLock()
         releaseMediaPlayer()
+        playingHuman = false
         pendingText = text
-        startForegroundCompat(buildNotification(pendingTitle, text.take(100)))
+        persistState(mode = MODE_TEXT, title = pendingTitle, text = text, index = 0)
+        startForegroundCompat(buildNotification(pendingTitle, text.take(120)))
         if (tts == null) initializeTts() else if (ready) speakPending()
         return START_STICKY
     }
 
+    /* ------------------------ التسجيلات البشرية ------------------------ */
+
     private fun playHumanRecording(resourceName: String) {
         tts?.stop()
         releaseMediaPlayer()
-        startForegroundCompat(buildNotification(pendingTitle, "تشغيل تسجيل صوتي بشري"))
+        playingHuman = true
+        humanIndex = HumanAzkarAudioCatalog.tracks
+            .indexOfFirst { it.resourceName == resourceName }
+            .takeIf { it >= 0 } ?: 0
+        startHumanTrack()
+    }
 
-        val resourceId = resources.getIdentifier(resourceName, "raw", packageName)
+    private fun startHumanTrack() {
+        val track = HumanAzkarAudioCatalog.trackAt(humanIndex)
+        pendingTitle = track.title
+        acquireWakeLock()
+        renewWakeLock()
+        persistState(mode = MODE_HUMAN, title = track.title, text = "", index = humanIndex)
+        startForegroundCompat(
+            buildNotification(
+                track.title,
+                "تشغيل تسلسلي · المقطع ${track.index} من ${HumanAzkarAudioCatalog.tracks.size}"
+            )
+        )
+
+        val resourceId = resources.getIdentifier(track.resourceName, "raw", packageName)
         if (resourceId == 0) {
-            stopPlayback()
+            advanceHumanTrack()
             return
         }
 
@@ -97,11 +165,20 @@ class AudioAzkarPlaybackService : Service() {
                     .build()
             )
             player.setOnPreparedListener { prepared ->
-                if (mediaPlayer === prepared) prepared.start()
+                if (mediaPlayer === prepared) {
+                    runCatching { prepared.start() }
+                }
             }
-            player.setOnCompletionListener { stopPlayback() }
+            // الانتقال إلى المقطع التالي تلقائيًا بدلًا من الإيقاف.
+            player.setOnCompletionListener { completed ->
+                if (mediaPlayer === completed) {
+                    releaseMediaPlayer()
+                    advanceHumanTrack()
+                }
+            }
             player.setOnErrorListener { _, _, _ ->
-                stopPlayback()
+                releaseMediaPlayer()
+                advanceHumanTrack()
                 true
             }
             resources.openRawResourceFd(resourceId).use { descriptor ->
@@ -113,9 +190,18 @@ class AudioAzkarPlaybackService : Service() {
             }
             player.prepareAsync()
         } catch (_: Exception) {
-            stopPlayback()
+            releaseMediaPlayer()
+            advanceHumanTrack()
         }
     }
+
+    private fun advanceHumanTrack() {
+        if (!playingHuman) return
+        humanIndex = (humanIndex + 1) % HumanAzkarAudioCatalog.tracks.size
+        startHumanTrack()
+    }
+
+    /* ------------------------------- TTS ------------------------------- */
 
     private fun initializeTts() {
         tts = TextToSpeech(applicationContext) { status ->
@@ -152,8 +238,11 @@ class AudioAzkarPlaybackService : Service() {
                     if (chunkIndex + 1 < speechChunks.size) {
                         chunkIndex++
                         speakChunk()
-                    } else stopPlayback()
+                    } else {
+                        stopPlayback()
+                    }
                 }
+
                 @Deprecated("Deprecated in Java")
                 override fun onError(utteranceId: String?) = stopPlayback()
                 override fun onError(utteranceId: String?, errorCode: Int) = stopPlayback()
@@ -194,6 +283,8 @@ class AudioAzkarPlaybackService : Service() {
         return out
     }
 
+    /* --------------------------- الإشعارات --------------------------- */
+
     private fun buildNotification(title: String, snippet: String): Notification {
         val openIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -214,6 +305,7 @@ class AudioAzkarPlaybackService : Service() {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setShowWhen(false)
             .setContentIntent(openPending)
             .addAction(android.R.drawable.ic_media_pause, "إيقاف", stopPending)
             .build()
@@ -223,7 +315,11 @@ class AudioAzkarPlaybackService : Service() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "تشغيل الأذكار الصوتية", NotificationManager.IMPORTANCE_LOW).apply {
+            NotificationChannel(
+                CHANNEL_ID,
+                "تشغيل الأذكار الصوتية",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
                 description = "إشعار مستمر أثناء قراءة الأذكار صوتيًا في الخلفية"
                 setSound(null, null)
                 enableVibration(false)
@@ -233,13 +329,59 @@ class AudioAzkarPlaybackService : Service() {
 
     private fun startForegroundCompat(notification: Notification) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+            )
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
     }
 
+    /* ------------------------ حفظ واستعادة الحالة ------------------------ */
+
+    private fun persistState(mode: String, title: String, text: String, index: Int) {
+        prefs.edit()
+            .putBoolean(KEY_PLAYING, true)
+            .putString(KEY_MODE, mode)
+            .putString(KEY_TITLE, title)
+            .putString(KEY_TEXT, text)
+            .putInt(KEY_INDEX, index)
+            .apply()
+    }
+
+    private fun restoreFromPrefs() {
+        if (!prefs.getBoolean(KEY_PLAYING, false)) {
+            stopSelf()
+            return
+        }
+        val mode = prefs.getString(KEY_MODE, MODE_HUMAN)
+        pendingTitle = prefs.getString(KEY_TITLE, DEFAULT_TITLE) ?: DEFAULT_TITLE
+        if (mode == MODE_TEXT) {
+            val text = prefs.getString(KEY_TEXT, "").orEmpty()
+            if (text.isBlank()) {
+                stopPlayback()
+                return
+            }
+            pendingText = text
+            acquireWakeLock()
+            startForegroundCompat(buildNotification(pendingTitle, text.take(120)))
+            if (tts == null) initializeTts() else if (ready) speakPending()
+        } else {
+            playingHuman = true
+            humanIndex = prefs.getInt(KEY_INDEX, 0)
+                .coerceIn(0, HumanAzkarAudioCatalog.tracks.lastIndex)
+            acquireWakeLock()
+            startHumanTrack()
+        }
+    }
+
+    /* ------------------------- الإيقاف والتحرير ------------------------- */
+
     private fun stopPlayback() {
+        playingHuman = false
+        prefs.edit().putBoolean(KEY_PLAYING, false).apply()
         tts?.stop()
         releaseMediaPlayer()
         releaseWakeLock()
@@ -257,6 +399,16 @@ class AudioAzkarPlaybackService : Service() {
             if (player.isPlaying) player.stop()
             player.release()
         }
+    }
+
+    /**
+     * إزالة التطبيق من قائمة التطبيقات الحديثة لا توقف التشغيل؛ الخدمة تبقى أمامية وتكمل التسلسل.
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        if (!playingHuman && mediaPlayer == null) {
+            stopPlayback()
+        }
+        super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
@@ -278,5 +430,20 @@ class AudioAzkarPlaybackService : Service() {
         const val EXTRA_AUDIO_RESOURCE_NAME = "com.example.extra.HUMAN_AZKAR_AUDIO_RESOURCE"
         const val CHANNEL_ID = "rim_athkar_playback"
         const val NOTIFICATION_ID = 7041
+
+        private const val DEFAULT_TITLE = "الأذكار الصوتية"
+        private const val PREFS_NAME = "rim_athkar_playback_state"
+        private const val KEY_PLAYING = "playing"
+        private const val KEY_MODE = "mode"
+        private const val KEY_TITLE = "title"
+        private const val KEY_TEXT = "text"
+        private const val KEY_INDEX = "index"
+        private const val MODE_HUMAN = "human"
+        private const val MODE_TEXT = "text"
+
+        /** هل هناك تشغيل جارٍ حاليًا؟ */
+        fun isPlaying(context: Context): Boolean =
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getBoolean(KEY_PLAYING, false)
     }
 }

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_age"
+        android:shortcutId="shortcut_age_calculator"
+        android:shortcutLongLabel="@string/shortcut_age_long"
+        android:shortcutShortLabel="@string/shortcut_age_short">
+        <intent
+            android:action="com.aistudio.rimathkar.kxmpzq.SHORTCUT_AGE_CALCULATOR"
+            android:targetClass="com.example.MainActivity"
+            android:targetPackage="com.aistudio.rimathkar.kxmpzq" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_tasbeeh"
+        android:shortcutId="shortcut_floating_tasbeeh"
+        android:shortcutLongLabel="@string/shortcut_tasbeeh_long"
+        android:shortcutShortLabel="@string/shortcut_tasbeeh_short">
+        <intent
+            android:action="com.aistudio.rimathkar.kxmpzq.SHORTCUT_FLOATING_TASBEEH"
+            android:targetClass="com.example.MainActivity"
+            android:targetPackage="com.aistudio.rimathkar.kxmpzq" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_tasbeeh"
+        android:shortcutId="shortcut_audio_azkar"
+        android:shortcutLongLabel="@string/shortcut_audio_long"
+        android:shortcutShortLabel="@string/shortcut_audio_short">
+        <intent
+            android:action="com.aistudio.rimathkar.kxmpzq.SHORTCUT_AUDIO_AZKAR"
+            android:targetClass="com.example.MainActivity"
+            android:targetPackage="com.aistudio.rimathkar.kxmpzq" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+
+</shortcuts>

@@ -24,13 +24,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.data.AthkarReminderScheduler
@@ -46,6 +49,7 @@ import com.example.data.PreferencesSnapshot
 import com.example.data.QuranRepository
 import com.example.data.ReminderScheduler
 import com.example.data.TtsManager
+import com.example.service.FloatingTasbeehService
 import com.example.ui.components.AppBackgroundLayer
 import com.example.ui.components.AppSettingsDrawer
 import com.example.ui.components.SmartReaderBus
@@ -55,6 +59,7 @@ import com.example.ui.screens.AboutScreen
 import com.example.ui.screens.AudioAzkarScreen
 import com.example.ui.screens.AdiyaScreen
 import com.example.ui.screens.AdvancedSettingsScreen
+import com.example.ui.screens.AgeCalculatorScreen
 import com.example.ui.screens.AiVoiceAssistantScreen
 import com.example.ui.screens.CustomAzkarScreen
 import com.example.ui.screens.DeveloperLinkScreen
@@ -87,6 +92,12 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var preferencesManager: PreferencesManager
 
+    // مسار داخلي مطلوب فتحه عند الدخول من اختصار المشغّل (الضغط المطوّل على أيقونة التطبيق)
+    private val pendingRouteState = androidx.compose.runtime.mutableStateOf<String?>(null)
+    private var pendingRoute: String?
+        get() = pendingRouteState.value
+        set(value) { pendingRouteState.value = value }
+
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* no-op */ }
 
@@ -95,6 +106,9 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         preferencesManager = PreferencesManager(applicationContext)
+
+        // معالجة الدخول من اختصارات المشغّل (المسبحة العائمة / حاسبة العمر / الأذكار الصوتية)
+        handleShortcutIntent(intent)
 
         // --- تهيئة المحرّكات الأساسية مرة واحدة فقط ---
         // هذه الميزات مساعدة وليست شرطًا لعرض التطبيق؛ فشل إحداها لا ينبغي أن
@@ -150,10 +164,24 @@ class MainActivity : ComponentActivity() {
             val khatmahPagesDone = preferences.khatmahPagesDone
             val khatmahActive = preferences.khatmahActive
 
-            // قراءة رقم الإصدار تجعل الواجهة تُعيد الرسم فور اختيار/إزالة صورة الخلفية.
+            // تتبّع الصفحة الحالية لتطبيق خلفيتها الخاصة (لكل صفحة خلفية مستقلة).
+            val navController = rememberNavController()
+
+            // الانتقال إلى الصفحة المطلوبة عند الدخول من اختصار المشغّل
+            LaunchedEffect(pendingRoute) {
+                val target = pendingRoute
+                if (target != null) {
+                    pendingRoute = null
+                    runCatching { navController.navigate(target) }
+                }
+            }
+
+            val backStackEntry by navController.currentBackStackEntryAsState()
+            val currentRoute = backStackEntry?.destination?.route
+            val pageKey = AppBackgroundStore.pageKeyForRoute(currentRoute)
             val backgroundRevision = AppBackgroundStore.revision
-            val backgroundEnabled = remember(backgroundRevision) {
-                AppBackgroundStore.isEnabled(this@MainActivity)
+            val pageBackgroundEnabled = remember(backgroundRevision, pageKey) {
+                pageKey?.let { AppBackgroundStore.isEnabled(this@MainActivity, it) } == true
             }
 
             // مزامنة إشعارات الأذكار التلقائية (WorkManager + منبّه يومي بوقت يدوي)
@@ -202,11 +230,14 @@ class MainActivity : ComponentActivity() {
                 MyApplicationTheme(
                     darkTheme = darkMode,
                     fontFamily = AppFonts.familyFor(fontFamilyIndex),
-                    transparentBackground = backgroundEnabled
+                    pageColor = if (preferences.pageColor != 0L) Color(preferences.pageColor) else null,
+                    fontColor = if (preferences.fontColor != 0L) Color(preferences.fontColor) else null,
+                    transparentBackground = pageBackgroundEnabled
                 ) {
                     Box(Modifier.fillMaxSize()) {
-                        AppBackgroundLayer(darkMode = darkMode)
+                        AppBackgroundLayer(pageKey = pageKey, darkMode = darkMode)
                         AppRoot(
+                            navController = navController,
                             preferencesManager = preferencesManager,
                             favorites = favorites,
                             darkMode = darkMode,
@@ -220,7 +251,9 @@ class MainActivity : ComponentActivity() {
                             khatmahDays = khatmahDays,
                             khatmahStart = khatmahStart,
                             khatmahPagesDone = khatmahPagesDone,
-                            khatmahActive = khatmahActive
+                            khatmahActive = khatmahActive,
+                            pageColor = preferences.pageColor,
+                            fontColor = preferences.fontColor
                         )
                     }
                 }
@@ -231,6 +264,39 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         TtsManager.stop()
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleShortcutIntent(intent)
+    }
+
+    /** يوجّه المستخدم حسب الاختصار الذي ضغط عليه من شاشة المشغّل. */
+    private fun handleShortcutIntent(intent: android.content.Intent?) {
+        when (intent?.action) {
+            ACTION_SHORTCUT_AGE -> pendingRoute = "age_calculator"
+            ACTION_SHORTCUT_AUDIO -> pendingRoute = "audio_azkar"
+            ACTION_SHORTCUT_TASBEEH -> {
+                if (FloatingTasbeehService.canDrawOverlays(this)) {
+                    runCatching {
+                        ContextCompat.startForegroundService(
+                            this,
+                            android.content.Intent(this, FloatingTasbeehService::class.java)
+                        )
+                    }
+                } else {
+                    runCatching {
+                        startActivity(
+                            android.content.Intent(
+                                android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                android.net.Uri.parse("package:$packageName")
+                            )
+                        )
+                    }
+                }
+            }
+        }
     }
 
     private fun runStartupStep(name: String, action: () -> Unit) {
@@ -244,10 +310,17 @@ class MainActivity : ComponentActivity() {
             )
         }
     }
+
+    companion object {
+        const val ACTION_SHORTCUT_AGE = "com.aistudio.rimathkar.kxmpzq.SHORTCUT_AGE_CALCULATOR"
+        const val ACTION_SHORTCUT_TASBEEH = "com.aistudio.rimathkar.kxmpzq.SHORTCUT_FLOATING_TASBEEH"
+        const val ACTION_SHORTCUT_AUDIO = "com.aistudio.rimathkar.kxmpzq.SHORTCUT_AUDIO_AZKAR"
+    }
 }
 
 @Composable
 private fun AppRoot(
+    navController: NavHostController,
     preferencesManager: PreferencesManager,
     favorites: Set<String>,
     darkMode: Boolean,
@@ -261,10 +334,11 @@ private fun AppRoot(
     khatmahDays: Int,
     khatmahStart: Long,
     khatmahPagesDone: Int,
-    khatmahActive: Boolean
+    khatmahActive: Boolean,
+    pageColor: Long,
+    fontColor: Long
 ) {
     val context = LocalContext.current
-    val navController = rememberNavController()
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
 
@@ -338,8 +412,30 @@ private fun AppRoot(
                         onNamesOfAllahClick = { navController.navigate("names_of_allah") },
                         onProphetDuasClick = { navController.navigate("prophet_duas") },
                         onAudioAzkarClick = { navController.navigate("audio_azkar") },
-                        onPathToSuccessClick = { navController.navigate("path_to_success") }
+                        onPathToSuccessClick = { navController.navigate("path_to_success") },
+                        onAgeCalculatorClick = { navController.navigate("age_calculator") },
+                        onFloatingTasbeehClick = {
+                            val intent = android.content.Intent(context, FloatingTasbeehService::class.java)
+                                .setAction(FloatingTasbeehService.ACTION_START)
+                            if (FloatingTasbeehService.canDrawOverlays(context)) {
+                                FloatingTasbeehService.setEnabled(context, true)
+                                runCatching { ContextCompat.startForegroundService(context, intent) }
+                            } else {
+                                runCatching {
+                                    context.startActivity(
+                                        android.content.Intent(
+                                            android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                            android.net.Uri.parse("package:${context.packageName}")
+                                        )
+                                    )
+                                }
+                            }
+                        }
                     )
+                }
+
+                composable("age_calculator") {
+                    AgeCalculatorScreen(onBackClick = { navController.popBackStack() })
                 }
 
                 composable("audio_azkar") {
@@ -500,6 +596,14 @@ private fun AppRoot(
                         onTelegram = { navController.navigate("dev_link/telegram") },
                         onBlog = { navController.navigate("dev_link/blog") },
                         onPlatform = { navController.navigate("dev_link/platform") },
+                        pageColor = pageColor,
+                        fontColor = fontColor,
+                        onPageColorChange = { value ->
+                            scope.launch { preferencesManager.setPageColor(value) }
+                        },
+                        onFontColorChange = { value ->
+                            scope.launch { preferencesManager.setFontColor(value) }
+                        },
                         onBackClick = { navController.popBackStack() }
                     )
                 }

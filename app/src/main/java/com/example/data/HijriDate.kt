@@ -40,7 +40,51 @@ object HijriCalendar {
         )
     }
 
-    private fun gregorianToJD(year: Int, month: Int, day: Int): Int {
+    /** تاريخ ميلادي. */
+    data class GregorianDate(val year: Int, val month: Int, val day: Int) {
+        val formatted: String get() = "$day / $month / $year م"
+    }
+
+    /**
+     * تحويل تاريخ هجري إلى تاريخ ميلادي (عكس خوارزمية fromGregorian تمامًا).
+     * يعيد null إذا كان التاريخ غير صالح.
+     */
+    fun toGregorian(hYear: Int, hMonth: Int, hDay: Int): GregorianDate? {
+        if (hMonth !in 1..12 || hDay !in 1..30 || hYear !in 1300..1600) return null
+        val jd = hijriToJD(hYear, hMonth, hDay)
+        val (y, m, d) = jdToGregorian(jd)
+        if (y !in 1900..2200 || m !in 1..12 || d !in 1..31) return null
+        return GregorianDate(y, m, d)
+    }
+
+    /** اليوم اليولياني لتاريخ هجري. */
+    fun hijriToJD(year: Int, month: Int, day: Int): Int =
+        (11 * year + 3) / 30 + 354 * year + 30 * month - (month - 1) / 2 + day + 1948440 - 385
+
+    /** تحويل اليوم اليولياني إلى تاريخ ميلادي. */
+    fun jdToGregorian(jd: Int): Triple<Int, Int, Int> {
+        var l = jd + 68569
+        val n = (4 * l) / 146097
+        l -= (146097 * n + 3) / 4
+        val i = (4000 * (l + 1)) / 1461001
+        l -= (1461 * i) / 4 - 31
+        val j = (80 * l) / 2447
+        val day = l - (2447 * j) / 80
+        l = j / 11
+        val month = j + 2 - 12 * l
+        val year = 100 * (n - 49) + i + l
+        return Triple(year, month, day)
+    }
+
+    /** عدد أيام الشهر الهجري وفق الخوارزمية نفسها. */
+    fun hijriMonthLength(year: Int, month: Int): Int {
+        val start = hijriToJD(year, month, 1)
+        val next = if (month >= 12) hijriToJD(year + 1, 1, 1) else hijriToJD(year, month + 1, 1)
+        return next - start
+    }
+
+    /** اليوم اليولياني لتاريخ ميلادي (عام). */
+    fun gregorianToJD(year: Int, month: Int, day: Int): Int {
         var y = year
         var m = month
         if (m < 3) {

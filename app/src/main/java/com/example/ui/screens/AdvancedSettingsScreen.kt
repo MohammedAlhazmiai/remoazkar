@@ -10,9 +10,14 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -24,6 +29,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -35,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.data.AppBackgroundStore
 import com.example.data.AthkarReminderScheduler
+import com.example.service.FloatingTasbeehService
 import com.example.data.PreferencesManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -57,6 +65,10 @@ fun AdvancedSettingsScreen(
     onTelegram: () -> Unit = {},
     onBlog: () -> Unit = {},
     onPlatform: () -> Unit = {},
+    pageColor: Long = 0L,
+    fontColor: Long = 0L,
+    onPageColorChange: (Long) -> Unit = {},
+    onFontColorChange: (Long) -> Unit = {},
     onBackClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -102,9 +114,24 @@ fun AdvancedSettingsScreen(
                 }
             }
 
-            // خلفية التطبيق من معرض الهاتف
+            // ألوان الصفحات وألوان الخطوط
+            item {
+                PageColorsCard(
+                    pageColor = pageColor,
+                    fontColor = fontColor,
+                    onPageColorChange = onPageColorChange,
+                    onFontColorChange = onFontColorChange
+                )
+            }
+
+            // خلفية الصفحات من معرض الهاتف
             item {
                 AppBackgroundCard()
+            }
+
+            // المسبحة العائمة فوق الشاشة
+            item {
+                FloatingTasbeehCard()
             }
 
             // Font Size Control
@@ -253,31 +280,52 @@ fun AdvancedSettingsScreen(
 }
 
 /* ------------------------------------------------------------------ */
-/*  خلفية التطبيق                                                      */
+/* ------------------------------------------------------------------ */
+/*  خلفية الصفحات — لكل صفحة خلفية مستقلة                             */
 /* ------------------------------------------------------------------ */
 
 @Composable
 private fun AppBackgroundCard() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var revision by remember { mutableIntStateOf(AppBackgroundStore.revision) }
-    var enabled by remember { mutableStateOf(AppBackgroundStore.isEnabled(context)) }
-    var hasImage by remember { mutableStateOf(AppBackgroundStore.imagePath(context) != null) }
-    var scrim by remember { mutableIntStateOf(AppBackgroundStore.scrimPercent(context)) }
+    val revision = AppBackgroundStore.revision
+    var pendingTargets by remember { mutableStateOf<List<String>>(emptyList()) }
     var message by remember { mutableStateOf<String?>(null) }
+    var scrim by remember(revision) { mutableIntStateOf(AppBackgroundStore.scrimPercent(context)) }
+
+    val selectedPages = remember(revision) {
+        AppBackgroundStore.pages.map { it.key }
+            .filter { AppBackgroundStore.isPageSelected(context, it) }
+            .toSet()
+    }
 
     val picker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
-        if (uri != null) {
+        val targets = pendingTargets
+        pendingTargets = emptyList()
+        if (uri != null && targets.isNotEmpty()) {
             scope.launch {
-                val ok = withContext(Dispatchers.IO) { AppBackgroundStore.save(context, uri) }
-                revision = AppBackgroundStore.revision
-                hasImage = AppBackgroundStore.imagePath(context) != null
-                enabled = AppBackgroundStore.isEnabled(context)
-                message = if (ok) "تم تعيين الصورة خلفيةً لصفحات التطبيق" else "تعذّر قراءة الصورة، جرّب صورة أخرى"
+                val ok = withContext(Dispatchers.IO) {
+                    targets.all { key -> AppBackgroundStore.save(context, key, uri) }
+                }
+                message = if (ok) {
+                    if (targets.size == 1) "تم تعيين الصورة خلفيةً لصفحة «${AppBackgroundStore.titleFor(targets.first())}»"
+                    else "تم تعيين الصورة خلفيةً لـ ${targets.size} صفحات"
+                } else {
+                    "تعذّر قراءة الصورة، جرّب صورة أخرى"
+                }
             }
         }
+    }
+
+    fun chooseFor(keys: List<String>) {
+        if (keys.isEmpty()) {
+            message = "حدّد صفحة واحدة على الأقل بوضع علامة ✔ في الخانة الصغيرة أولًا"
+            return
+        }
+        pendingTargets = keys
+        picker.launch("image/*")
     }
 
     Card(
@@ -287,92 +335,441 @@ private fun AppBackgroundCard() {
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             Text(
-                "خلفية التطبيق",
+                "خلفية الصفحات",
                 fontWeight = FontWeight.Bold,
                 fontSize = 16.sp,
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                "اختر صورة من معرض الهاتف لتظهر خلف جميع صفحات التطبيق، ويمكنك تغييرها أو إزالتها في أي وقت.",
+                "ضع علامة ✔ في الخانة الصغيرة أمام الصفحة أو الصفحات التي تريد تغيير خلفيتها، ثم عيّن صورة من معرض الهاتف. لكل صفحة خلفيتها المستقلة، ويمكنك تغيير خلفية أي صفحة أو إزالتها دون غيرها.",
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(12.dp))
 
-            if (hasImage) {
-                val path = remember(revision) { AppBackgroundStore.imagePath(context) }
-                val preview = remember(path) {
-                    runCatching {
-                        android.graphics.BitmapFactory.decodeFile(path)?.asImageBitmap()
-                    }.getOrNull()
-                }
-                if (preview != null) {
-                    Image(
-                        bitmap = preview,
-                        contentDescription = "معاينة الخلفية",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(130.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                    )
-                    Spacer(Modifier.height(14.dp))
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = { chooseFor(selectedPages.toList()) },
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Text("تفعيل الخلفية", fontSize = 15.sp)
-                    Switch(
-                        checked = enabled,
-                        onCheckedChange = { value ->
-                            AppBackgroundStore.setEnabled(context, value)
-                            enabled = value
-                            revision = AppBackgroundStore.revision
-                        }
+                    Icon(Icons.Default.AddPhotoAlternate, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        if (selectedPages.isEmpty()) "تعيين صورة للصفحات المحددة"
+                        else "تعيين صورة لـ ${selectedPages.size} صفحة",
+                        fontSize = 13.sp
                     )
                 }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = {
+                    AppBackgroundStore.pages.forEach { page ->
+                        AppBackgroundStore.setPageEnabled(context, page.key, true)
+                    }
+                }) { Text("تحديد الكل", fontSize = 12.sp) }
+                TextButton(onClick = {
+                    AppBackgroundStore.pages.forEach { page ->
+                        AppBackgroundStore.setPageEnabled(context, page.key, false)
+                    }
+                }) { Text("إلغاء التحديد", fontSize = 12.sp) }
+                TextButton(onClick = {
+                    AppBackgroundStore.clearAll(context)
+                    message = "تمت إزالة خلفيات جميع الصفحات"
+                }) { Text("إزالة الكل", fontSize = 12.sp) }
+            }
 
-                Text("درجة التعتيم: $scrim%", fontSize = 13.sp)
-                Slider(
-                    value = scrim.toFloat(),
-                    onValueChange = { value ->
-                        scrim = value.toInt()
-                        AppBackgroundStore.setScrimPercent(context, scrim)
+            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+            AppBackgroundStore.pages.forEach { page ->
+                val hasImage = AppBackgroundStore.hasImage(context, page.key)
+                val checked = page.key in selectedPages
+                PageBackgroundRow(
+                    title = page.title,
+                    hasImage = hasImage,
+                    checked = checked,
+                    imagePath = if (hasImage) AppBackgroundStore.imagePath(context, page.key) else null,
+                    onToggle = { value ->
+                        if (value && !hasImage) {
+                            chooseFor(listOf(page.key))
+                        } else {
+                            AppBackgroundStore.setPageEnabled(context, page.key, value)
+                        }
                     },
-                    valueRange = 0f..85f,
-                    steps = 16
+                    onPick = { chooseFor(listOf(page.key)) },
+                    onClear = {
+                        AppBackgroundStore.clearPage(context, page.key)
+                        message = "تمت إزالة خلفية «${page.title}»"
+                    }
                 )
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(onClick = { picker.launch("image/*") }) {
-                    Icon(Icons.Default.AddPhotoAlternate, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (hasImage) "تغيير الصورة" else "رفع صورة من الهاتف")
-                }
-                if (hasImage) {
-                    OutlinedButton(onClick = {
-                        AppBackgroundStore.clear(context)
-                        revision = AppBackgroundStore.revision
-                        hasImage = false
-                        enabled = false
-                        message = "تمت إزالة الخلفية"
-                    }) {
-                        Icon(Icons.Default.DeleteOutline, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("إزالة")
-                    }
-                }
-            }
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+            Spacer(Modifier.height(8.dp))
+
+            Text("درجة التعتيم فوق الخلفية: $scrim%", fontSize = 13.sp)
+            Slider(
+                value = scrim.toFloat(),
+                onValueChange = { value ->
+                    scrim = value.toInt()
+                    AppBackgroundStore.setScrimPercent(context, scrim)
+                },
+                valueRange = 0f..85f,
+                steps = 16
+            )
+            Text(
+                "كلما زادت درجة التعتيم صار النص أوضح فوق الصورة.",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
 
             message?.let {
                 Spacer(Modifier.height(8.dp))
                 Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
             }
+        }
+    }
+}
+
+@Composable
+private fun PageBackgroundRow(
+    title: String,
+    hasImage: Boolean,
+    checked: Boolean,
+    imagePath: String?,
+    onToggle: (Boolean) -> Unit,
+    onPick: () -> Unit,
+    onClear: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Checkbox(
+            checked = checked,
+            onCheckedChange = onToggle,
+            modifier = Modifier.size(36.dp)
+        )
+        Spacer(Modifier.width(4.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, fontSize = 14.sp)
+            Text(
+                if (hasImage) (if (checked) "خلفية مفعّلة" else "صورة محفوظة · غير مفعّلة") else "بدون صورة",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
+        }
+        if (imagePath != null) {
+            val thumb = remember(imagePath) { loadThumbnail(imagePath) }
+            if (thumb != null) {
+                Image(
+                    bitmap = thumb,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                )
+                Spacer(Modifier.width(4.dp))
+            }
+        }
+        IconButton(onClick = onPick, modifier = Modifier.size(38.dp)) {
+            Icon(
+                Icons.Default.AddPhotoAlternate,
+                contentDescription = "تعيين صورة",
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+        if (hasImage) {
+            IconButton(onClick = onClear, modifier = Modifier.size(38.dp)) {
+                Icon(
+                    Icons.Default.DeleteOutline,
+                    contentDescription = "إزالة الخلفية",
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    }
+}
+
+private fun loadThumbnail(path: String): ImageBitmap? {
+    return runCatching {
+        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        android.graphics.BitmapFactory.decodeFile(path, bounds)
+        var sample = 1
+        while (bounds.outWidth / sample > 160 || bounds.outHeight / sample > 160) sample *= 2
+        val options = android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }
+        android.graphics.BitmapFactory.decodeFile(path, options)?.asImageBitmap()
+    }.getOrNull()
+}
+
+/* ------------------------------------------------------------------ */
+/*  ألوان الصفحات وألوان الخطوط                                        */
+/* ------------------------------------------------------------------ */
+
+@Composable
+private fun PageColorsCard(
+    pageColor: Long,
+    fontColor: Long,
+    onPageColorChange: (Long) -> Unit,
+    onFontColorChange: (Long) -> Unit
+) {
+    val pageSwatches = listOf(
+        0L to "افتراضي",
+        0xFF0B1F17L to "أخضر داكن",
+        0xFF101A2BL to "أزرق ليلي",
+        0xFF1B1226L to "بنفسجي",
+        0xFF231A12L to "بنّي دافئ",
+        0xFF0F0F0FL to "أسود",
+        0xFFF6F1E4L to "عاجي",
+        0xFFEAF3ECL to "أخضر فاتح",
+        0xFFFFFFFFL to "أبيض"
+    )
+    val fontSwatches = listOf(
+        0L to "افتراضي",
+        0xFFE5C158L to "ذهبي",
+        0xFFFFFFFFL to "أبيض",
+        0xFFF1E9D2L to "عاجي",
+        0xFF9FD8B4L to "أخضر فاتح",
+        0xFFBFD7FFL to "أزرق فاتح",
+        0xFF101010L to "أسود"
+    )
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                "ألوان الصفحات وألوان الخطوط",
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "اختر لون خلفية الصفحات ولون الخط. تُطبَّق الألوان فورًا على كل صفحات التطبيق، ويمكنك العودة للون الافتراضي في أي وقت.",
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
+
+            Spacer(Modifier.height(14.dp))
+            Text("لون خلفية الصفحات", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(8.dp))
+            ColorSwatchRow(
+                swatches = pageSwatches,
+                selected = pageColor,
+                onSelect = onPageColorChange
+            )
+
+            Spacer(Modifier.height(16.dp))
+            Text("لون الخط", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(8.dp))
+            ColorSwatchRow(
+                swatches = fontSwatches,
+                selected = fontColor,
+                onSelect = onFontColorChange
+            )
+
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(onClick = {
+                    onPageColorChange(0L)
+                    onFontColorChange(0L)
+                }) {
+                    Icon(Icons.Default.RestartAlt, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("استعادة الألوان الافتراضية")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ColorSwatchRow(
+    swatches: List<Pair<Long, String>>,
+    selected: Long,
+    onSelect: (Long) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        swatches.forEach { (value, label) ->
+            val isSelected = value == selected
+            val color = if (value == 0L) MaterialTheme.colorScheme.surfaceVariant else Color(value)
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .width(64.dp)
+                    .clickable { onSelect(value) }
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(color)
+                        .border(
+                            width = if (isSelected) 3.dp else 1.dp,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isSelected) {
+                        Icon(
+                            Icons.Default.Check,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    label,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                )
+            }
+        }
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  المسبحة العائمة فوق شاشة الهاتف                                    */
+/* ------------------------------------------------------------------ */
+
+@Composable
+private fun FloatingTasbeehCard() {
+    val context = LocalContext.current
+    var enabled by remember { mutableStateOf(FloatingTasbeehService.isEnabled(context)) }
+    var overlayGranted by remember { mutableStateOf(FloatingTasbeehService.canDrawOverlays(context)) }
+
+    fun start() {
+        val intent = Intent(context, FloatingTasbeehService::class.java)
+            .setAction(FloatingTasbeehService.ACTION_START)
+        runCatching { ContextCompat.startForegroundService(context, intent) }
+    }
+
+    fun stop() {
+        val intent = Intent(context, FloatingTasbeehService::class.java)
+            .setAction(FloatingTasbeehService.ACTION_STOP)
+        runCatching { context.startService(intent) }
+        runCatching { context.stopService(Intent(context, FloatingTasbeehService::class.java)) }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                "المسبحة العائمة فوق الشاشة",
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "مسبحة تظهر فوق شاشة الهاتف حتى وأنت خارج التطبيق. انقر على البطاقة للتسبيح، اسحبها لأي مكان، وتهتزّ عند إكمال العدد. لإخفائها اضغط زر ✕.",
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
+            Spacer(Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("تشغيل المسبحة العائمة", fontSize = 15.sp)
+                Switch(
+                    checked = enabled,
+                    onCheckedChange = { value ->
+                        if (value) {
+                            overlayGranted = FloatingTasbeehService.canDrawOverlays(context)
+                            if (!overlayGranted) {
+                                runCatching {
+                                    context.startActivity(
+                                        Intent(
+                                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                            Uri.parse("package:${context.packageName}")
+                                        )
+                                    )
+                                }
+                            } else {
+                                FloatingTasbeehService.setEnabled(context, true)
+                                start()
+                                enabled = true
+                            }
+                        } else {
+                            FloatingTasbeehService.setEnabled(context, false)
+                            stop()
+                            enabled = false
+                        }
+                    }
+                )
+            }
+
+            if (!overlayGranted) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "إذن «الظهور فوق التطبيقات» غير ممنوح، وهو مطلوب لعرض المسبحة.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.error
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = {
+                    runCatching {
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:${context.packageName}")
+                            )
+                        )
+                    }
+                }) {
+                    Icon(Icons.Default.Layers, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("منح إذن الظهور فوق التطبيقات")
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = {
+                runCatching {
+                    context.startActivity(
+                        Intent(
+                            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                            Uri.parse("package:${context.packageName}")
+                        )
+                    )
+                }
+            }) {
+                Icon(Icons.Default.BatteryChargingFull, contentDescription = null)
+                Spacer(Modifier.width(6.dp))
+                Text("استثناء التطبيق من تحسين البطارية")
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "الاستثناء يمنع النظام من إيقاف المسبحة أو الأذكار الصوتية عند قفل الشاشة.",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
         }
     }
 }
