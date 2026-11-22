@@ -58,6 +58,8 @@ object AppBackgroundStore {
      */
     val pages: List<BackgroundPage> = listOf(
         BackgroundPage("home", "الرئيسية"),
+        BackgroundPage("prayer_times", "مواقيت الصلاة"),
+        BackgroundPage("qibla", "اتجاه القبلة"),
         BackgroundPage("quran", "القرآن الكريم"),
         BackgroundPage("quran_reader", "قراءة المصحف"),
         BackgroundPage("hisn", "حصن المسلم"),
@@ -187,6 +189,8 @@ object AppBackgroundStore {
             "hisn", "hisn_chapter", "custom_azkar", "audio_azkar" -> R.drawable.img_islamic_bg_mosque
             "tasbeeh", "wird", "spiritual_companion" -> R.drawable.img_islamic_bg_lantern
             "hijri", "reminders", "age_calculator" -> R.drawable.img_islamic_bg_night
+            "prayer_times" -> R.drawable.img_islamic_bg_mosque
+            "qibla" -> R.drawable.img_islamic_bg_courtyard
             "adiya", "ruqyah", "prophet_duas", "names_of_allah", "path_to_success" -> R.drawable.img_islamic_bg_courtyard
             "advanced_settings" -> R.drawable.img_islamic_bg_arabesque
             "ai_robot", "exclusive" -> R.drawable.img_islamic_bg_night

@@ -48,6 +48,7 @@ import com.example.data.LocalAppLanguage
 import com.example.data.LocalAppStrings
 import com.example.data.LocalTashkeelEnabled
 import com.example.data.NotificationHelper
+import com.example.data.PrayerAlarmScheduler
 import com.example.data.PreferencesManager
 import com.example.data.PreferencesSnapshot
 import com.example.data.QuranRepository
@@ -76,6 +77,8 @@ import com.example.ui.screens.KhatmahScreen
 import com.example.ui.screens.NamesOfAllahScreen
 import com.example.ui.screens.ProphetDuasScreen
 import com.example.ui.screens.HomeScreen
+import com.example.ui.screens.PrayerTimesScreen
+import com.example.ui.screens.QiblaScreen
 import com.example.ui.screens.QuranReaderScreen
 import com.example.ui.screens.QuranScreen
 import com.example.ui.screens.RemindersScreen
@@ -124,6 +127,9 @@ class MainActivity : ComponentActivity() {
         // scheduleAll يتضمن أيضًا جدولة ميزات الكهف والملك.
         runStartupStep("reminder scheduling") {
             ReminderScheduler.scheduleAll(applicationContext)
+        }
+        runStartupStep("prayer alarm scheduling") {
+            PrayerAlarmScheduler.scheduleAll(applicationContext)
         }
         runStartupStep("smart reader history") { SmartReaderBus.load(applicationContext) }
         runStartupStep("hijri offset") { HijriCalendar.initOffset(applicationContext) }
@@ -336,9 +342,9 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
-        const val ACTION_SHORTCUT_AGE = "com.aistudio.rimathkar.kxmpzq.SHORTCUT_AGE_CALCULATOR"
-        const val ACTION_SHORTCUT_TASBEEH = "com.aistudio.rimathkar.kxmpzq.SHORTCUT_FLOATING_TASBEEH"
-        const val ACTION_SHORTCUT_AUDIO = "com.aistudio.rimathkar.kxmpzq.SHORTCUT_AUDIO_AZKAR"
+        const val ACTION_SHORTCUT_AGE = "com.aistudio.zadulmuslim.kxmpzq.SHORTCUT_AGE_CALCULATOR"
+        const val ACTION_SHORTCUT_TASBEEH = "com.aistudio.zadulmuslim.kxmpzq.SHORTCUT_FLOATING_TASBEEH"
+        const val ACTION_SHORTCUT_AUDIO = "com.aistudio.zadulmuslim.kxmpzq.SHORTCUT_AUDIO_AZKAR"
     }
 }
 
@@ -438,6 +444,8 @@ private fun AppRoot(
                         onAudioAzkarClick = { navController.navigate("audio_azkar") },
                         onPathToSuccessClick = { navController.navigate("path_to_success") },
                         onAgeCalculatorClick = { navController.navigate("age_calculator") },
+                        onPrayerTimesClick = { navController.navigate("prayer_times") },
+                        onQiblaClick = { navController.navigate("qibla") },
                         onFloatingTasbeehClick = {
                             val intent = android.content.Intent(context, FloatingTasbeehService::class.java)
                                 .setAction(FloatingTasbeehService.ACTION_START)
@@ -460,6 +468,14 @@ private fun AppRoot(
 
                 composable("age_calculator") {
                     AgeCalculatorScreen(onBackClick = { navController.popBackStack() })
+                }
+
+                composable("prayer_times") {
+                    PrayerTimesScreen(onBackClick = { navController.popBackStack() })
+                }
+
+                composable("qibla") {
+                    QiblaScreen(onBackClick = { navController.popBackStack() })
                 }
 
                 composable("audio_azkar") {

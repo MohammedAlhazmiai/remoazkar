@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -40,6 +41,7 @@ import com.example.data.AppBackgroundStore
 import com.example.data.HijriCalendar
 import com.example.data.HisnChapter
 import com.example.data.HisnRepository
+import com.example.data.PrayerStore
 import com.example.data.RuqyahData
 import com.example.data.TtsManager
 import com.example.ui.components.SmartReaderBus
@@ -69,10 +71,24 @@ fun HomeScreen(
     onAudioAzkarClick: () -> Unit = {},
     onPathToSuccessClick: () -> Unit = {},
     onAgeCalculatorClick: () -> Unit = {},
-    onFloatingTasbeehClick: () -> Unit = {}
+    onFloatingTasbeehClick: () -> Unit = {},
+    onPrayerTimesClick: () -> Unit = {},
+    onQiblaClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val hijri = remember(HijriCalendar.offsetDays) { HijriCalendar.today() }
+    val prayerRevision = PrayerStore.revision
+    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000L)
+            nowMillis = System.currentTimeMillis()
+        }
+    }
+    val nextPrayer = remember(prayerRevision, nowMillis / 30_000L) {
+        PrayerStore.nextPrayer(context, nowMillis)
+    }
+    val prayerLocationName = remember(prayerRevision) { PrayerStore.locationName(context) }
     val featured = remember(HisnRepository.isLoaded) {
         HisnRepository.ensureLoaded(context)
         HisnRepository.featuredIds().mapNotNull { HisnRepository.chapter(it) }
@@ -94,11 +110,17 @@ fun HomeScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("ريمواذكار", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                        Text("زاد المسلم", fontWeight = FontWeight.Bold, fontSize = 20.sp)
                         Text(hijri.formatted, fontSize = 11.sp)
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = onQiblaClick,
+                        modifier = Modifier.testTag("qibla_icon_button")
+                    ) {
+                        Icon(Icons.Default.Explore, contentDescription = "اتجاه القبلة")
+                    }
                     IconButton(onClick = onSearchClick) {
                         Icon(Icons.Default.Search, contentDescription = "بحث")
                     }
@@ -190,6 +212,25 @@ fun HomeScreen(
                 HeroCard(daily)
             }
 
+            item {
+                NextPrayerHomeCard(
+                    prayerName = nextPrayer?.prayer?.type?.arabicName ?: "—",
+                    prayerTime = nextPrayer?.prayer?.formatted12() ?: "",
+                    locationName = prayerLocationName,
+                    remainingMillis = ((nextPrayer?.triggerMillis ?: nowMillis) - nowMillis).coerceAtLeast(0L),
+                    onPrayerTimesClick = onPrayerTimesClick,
+                    onQiblaClick = onQiblaClick
+                )
+            }
+
+            item { HomeSectionTitle("الصلاة والقبلة") }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FeatureCard("مواقيت الصلاة", "الصلوات الخمس والتنبيهات", Icons.Default.Schedule, Modifier.weight(1f), onPrayerTimesClick)
+                    FeatureCard("اتجاه القبلة", "بوصلة القبلة حسب موقعك", Icons.Default.Explore, Modifier.weight(1f), onQiblaClick)
+                }
+            }
+
             item { HomeSectionTitle("أذكار اليوم") }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -246,7 +287,7 @@ fun HomeScreen(
                         FeatureCard("القارئ الذكي", "استمع للنص المحدد", Icons.Default.RecordVoiceOver, Modifier.weight(1f), onAiRobotClick)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        FeatureCard("طريق الناجحين", "طريق الخلود ورحلة الآخرة", Icons.Default.Explore, Modifier.weight(1f), onPathToSuccessClick)
+                        FeatureCard("طريق الناجحين", "طريق الخلود ورحلة الآخرة", Icons.Default.TrendingUp, Modifier.weight(1f), onPathToSuccessClick)
                         FeatureCard("الرفيق الروحي", "إرشاد يومي", Icons.Default.Favorite, Modifier.weight(1f), onSpiritualCompanionClick)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -510,6 +551,77 @@ private fun ChapterMiniRow(chapter: HisnChapter, onClick: () -> Unit) {
                 )
             }
             Icon(Icons.Default.ChevronLeft, contentDescription = null)
+        }
+    }
+}
+
+@Composable
+private fun NextPrayerHomeCard(
+    prayerName: String,
+    prayerTime: String,
+    locationName: String,
+    remainingMillis: Long,
+    onPrayerTimesClick: () -> Unit,
+    onQiblaClick: () -> Unit
+) {
+    val totalMinutes = (remainingMillis / 60_000L).coerceAtLeast(0L)
+    val h = totalMinutes / 60L
+    val m = totalMinutes % 60L
+    val remainingLabel = if (h > 0) "بعد $h س $m د" else "بعد $m دقيقة"
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onPrayerTimesClick),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xEB153A2F)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(CircleShape)
+                    .background(Color(0x33FFD36A)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Mosque,
+                    contentDescription = null,
+                    tint = Color(0xFFFFD36A),
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "الصلاة القادمة: $prayerName ($prayerTime)",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+                Text(
+                    "$remainingLabel • $locationName",
+                    color = Color(0xFFD6E6DD),
+                    fontSize = 11.sp,
+                    maxLines = 1
+                )
+            }
+            IconButton(
+                onClick = onQiblaClick,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(
+                    Icons.Default.Explore,
+                    contentDescription = "اتجاه القبلة",
+                    tint = Color(0xFFFFD36A)
+                )
+            }
         }
     }
 }

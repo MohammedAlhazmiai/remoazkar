@@ -98,7 +98,7 @@ fun ExclusiveFeaturesScreen(onBackClick: () -> Unit) {
         ) {
             ScreenHeader(
                 title = tr("exclusive"),
-                subtitle = "ثلاث ميزات من ابتكار ريمواذكار",
+                subtitle = "ثلاث ميزات من ابتكار زاد المسلم",
                 onBackClick = onBackClick
             )
 
@@ -283,7 +283,7 @@ private fun LightSealTab() {
             onClick = {
                 val text = "بصمة النور الخاصة بي اليوم ${dateKey} — مجموع تسبيحي $total.\n" +
                     "بصمة: ${Integer.toHexString(abs(seed).toInt()).uppercase()}\n" +
-                    "من تطبيق ريمواذكار: ${ShareUtil.APP_LINK}"
+                    "من تطبيق زاد المسلم: ${ShareUtil.APP_LINK}"
                 ShareUtil.share(context, text, "بصمة النور")
             },
             modifier = Modifier

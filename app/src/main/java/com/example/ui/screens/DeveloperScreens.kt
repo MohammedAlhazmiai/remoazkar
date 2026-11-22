@@ -285,7 +285,7 @@ fun AboutScreen(
             }
 
             Text(
-                text = "© 2025 ريمواذكار — جميع الحقوق محفوظة\n${DeveloperInfo.CREDIT}",
+                text = "© 2025 زاد المسلم — جميع الحقوق محفوظة\n${DeveloperInfo.CREDIT}",
                 fontSize = 11.sp,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
@@ -351,7 +351,7 @@ fun SupportDeveloperScreen(onBackClick: () -> Unit) {
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "دعمك اختياري ويساعد في تطوير ريمواذكار. اختر الطريقة الأنسب لك لإتمام العملية خارج التطبيق.",
+                        "دعمك اختياري ويساعد في تطوير زاد المسلم. اختر الطريقة الأنسب لك لإتمام العملية خارج التطبيق.",
                         color = Color(0xFFC5D6E8),
                         fontSize = 13.sp,
                         lineHeight = 21.sp
@@ -510,7 +510,7 @@ fun SupportDeveloperScreen(onBackClick: () -> Unit) {
                     )
                     Spacer(Modifier.width(9.dp))
                     Text(
-                        "لا يجمع ريمواذكار بيانات الدفع ولا يعالج أي تحويلات مالية. راجع المبلغ واسم المستلم داخل محفظة جيب قبل التأكيد.",
+                        "لا يجمع زاد المسلم بيانات الدفع ولا يعالج أي تحويلات مالية. راجع المبلغ واسم المستلم داخل محفظة جيب قبل التأكيد.",
                         fontSize = 12.sp,
                         lineHeight = 19.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
@@ -541,7 +541,7 @@ fun DeveloperLinkScreen(
             "قناة المطور على تلجرام",
             DeveloperInfo.TELEGRAM,
             Icons.Default.Verified,
-            "تابع قناة المطور على تلجرام لتصلك تحديثات ريمواذكار أولًا بأول،" +
+            "تابع قناة المطور على تلجرام لتصلك تحديثات زاد المسلم أولًا بأول،" +
                 " وملاحظات الإصدارات الجديدة، والإضافات القادمة، وطرق التواصل المباشر مع المطور."
         )
         "blog" -> DevLink(

@@ -7,6 +7,7 @@ import android.content.Intent
 import com.example.data.AthkarReminderScheduler
 import com.example.data.HumanAzkarScheduler
 import com.example.data.NotificationHelper
+import com.example.data.PrayerAlarmScheduler
 import com.example.data.ReminderScheduler
 import com.example.service.FloatingTasbeehService
 
@@ -18,6 +19,7 @@ class BootReceiver : BroadcastReceiver() {
         val action = intent.action ?: return
         if (action == AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED) {
             HumanAzkarScheduler.rescheduleIfEnabled(context)
+            PrayerAlarmScheduler.scheduleAll(context)
             return
         }
         if (action == Intent.ACTION_BOOT_COMPLETED ||
@@ -27,6 +29,7 @@ class BootReceiver : BroadcastReceiver() {
         ) {
             NotificationHelper.createChannels(context)
             ReminderScheduler.scheduleAll(context)
+            PrayerAlarmScheduler.scheduleAll(context)
             AthkarReminderScheduler.syncFromMirror(context)
             HumanAzkarScheduler.rescheduleIfEnabled(context)
             // إعادة إظهار المسبحة العائمة إن كان المستخدم قد فعّلها قبل إعادة التشغيل.

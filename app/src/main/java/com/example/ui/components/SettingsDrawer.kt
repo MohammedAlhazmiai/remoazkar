@@ -340,7 +340,7 @@ fun AppSettingsDrawer(
                     DrawerRow(
                         icon = Icons.Default.Info,
                         title = tr("about_app"),
-                        value = "ريمواذكار · الإصدار 1.0",
+                        value = "زاد المسلم · الإصدار 1.0",
                         onClick = { close(); onAbout() }
                     )
                     DrawerRow(

@@ -103,7 +103,7 @@ fun SplashScreen(
 
             Image(
                 painter = painterResource(id = R.drawable.splash_portrait),
-                contentDescription = "شاشة الدخول - ريمواذكار",
+                contentDescription = "شاشة الدخول - زاد المسلم",
                 modifier = Modifier
                     .width(artSize)
                     .height(artSize),

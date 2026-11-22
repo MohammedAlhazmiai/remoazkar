@@ -6,6 +6,10 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- الموقع الجغرافي: لحساب مواقيت الصلاة واتجاه القبلة بدقة حسب موقع المستخدم -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
     <!-- الإشعارات على أندرويد 13+ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
@@ -81,6 +85,12 @@
         <!-- منبه مستقل لتشغيل التسجيلات البشرية بحسب الفاصل الذي يختاره المستخدم -->
         <receiver
             android:name=".receiver.HumanAzkarAlarmReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- منبّه تلقائي لمواعيد الصلوات الخمس -->
+        <receiver
+            android:name=".receiver.PrayerAlarmReceiver"
             android:enabled="true"
             android:exported="false" />
 

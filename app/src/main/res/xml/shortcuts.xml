@@ -8,9 +8,9 @@
         android:shortcutLongLabel="@string/shortcut_age_long"
         android:shortcutShortLabel="@string/shortcut_age_short">
         <intent
-            android:action="com.aistudio.rimathkar.kxmpzq.SHORTCUT_AGE_CALCULATOR"
+            android:action="com.aistudio.zadulmuslim.kxmpzq.SHORTCUT_AGE_CALCULATOR"
             android:targetClass="com.example.MainActivity"
-            android:targetPackage="com.aistudio.rimathkar.kxmpzq" />
+            android:targetPackage="com.aistudio.zadulmuslim.kxmpzq" />
         <categories android:name="android.shortcut.conversation" />
     </shortcut>
 
@@ -21,9 +21,9 @@
         android:shortcutLongLabel="@string/shortcut_tasbeeh_long"
         android:shortcutShortLabel="@string/shortcut_tasbeeh_short">
         <intent
-            android:action="com.aistudio.rimathkar.kxmpzq.SHORTCUT_FLOATING_TASBEEH"
+            android:action="com.aistudio.zadulmuslim.kxmpzq.SHORTCUT_FLOATING_TASBEEH"
             android:targetClass="com.example.MainActivity"
-            android:targetPackage="com.aistudio.rimathkar.kxmpzq" />
+            android:targetPackage="com.aistudio.zadulmuslim.kxmpzq" />
         <categories android:name="android.shortcut.conversation" />
     </shortcut>
 
@@ -34,9 +34,9 @@
         android:shortcutLongLabel="@string/shortcut_audio_long"
         android:shortcutShortLabel="@string/shortcut_audio_short">
         <intent
-            android:action="com.aistudio.rimathkar.kxmpzq.SHORTCUT_AUDIO_AZKAR"
+            android:action="com.aistudio.zadulmuslim.kxmpzq.SHORTCUT_AUDIO_AZKAR"
             android:targetClass="com.example.MainActivity"
-            android:targetPackage="com.aistudio.rimathkar.kxmpzq" />
+            android:targetPackage="com.aistudio.zadulmuslim.kxmpzq" />
         <categories android:name="android.shortcut.conversation" />
     </shortcut>
 

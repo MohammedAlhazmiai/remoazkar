@@ -53,7 +53,11 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.data.AppBackgroundStore
 import com.example.data.AthkarReminderScheduler
+import com.example.data.PrayerAlarmScheduler
+import com.example.data.PrayerCalculationMethod
+import com.example.data.PrayerStore
 import com.example.data.PreferencesManager
+import com.example.data.ResolvedPrayerTime
 import com.example.service.FloatingTasbeehService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -254,6 +258,10 @@ fun AdvancedSettingsScreen(
                 item {
                     AzkarNotificationsCard()
                 }
+
+                item {
+                    PrayerTimesSettingsCard()
+                }
             }
 
             // 4. قسم صفحات المطور
@@ -335,7 +343,7 @@ private fun SettingsOverviewBanner(
                     Spacer(Modifier.width(12.dp))
                     Column {
                         Text(
-                            "مركز تخصيص ريمو أذكار",
+                            "مركز تخصيص زاد المسلم",
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp
@@ -1649,5 +1657,228 @@ private fun AzkarNotificationsCard() {
             Spacer(modifier = Modifier.height(10.dp))
             Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
         }
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  تنبيهات ومواقيت الصلوات الخمس والموقع الجغرافي                     */
+/* ------------------------------------------------------------------ */
+
+@Composable
+private fun PrayerTimesSettingsCard() {
+    val context = LocalContext.current
+    val rev = PrayerStore.revision
+    var enabled by remember(rev) { mutableStateOf(PrayerStore.isNotificationsEnabled(context)) }
+    val locationName = remember(rev) { PrayerStore.locationName(context) }
+    val (_, prayers) = remember(rev) { PrayerStore.resolveDayPrayers(context) }
+    var selectedMethod by remember(rev) { mutableStateOf(PrayerStore.method(context)) }
+    var isLocating by remember { mutableStateOf(false) }
+    var statusMessage by remember { mutableStateOf<String?>(null) }
+    var editingPrayer by remember { mutableStateOf<ResolvedPrayerTime?>(null) }
+    var showCityPicker by remember { mutableStateOf(false) }
+
+    val gpsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        val granted = result[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            result[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (granted) {
+            isLocating = true
+            PrayerStore.refreshLocationFromDevice(context) { _, msg ->
+                isLocating = false
+                statusMessage = msg
+            }
+        } else {
+            statusMessage = "تم رفض إذن الموقع؛ يمكنك اختيار المدينة يدويًا."
+        }
+    }
+
+    SettingsCardShell(
+        title = "مواقيت الصلوات الخمس والموقع",
+        icon = Icons.Default.Mosque,
+        badge = if (enabled) "مفعّلة" else "متوقفة"
+    ) {
+        Text(
+            "تُحسب مواقيت الصلوات وتُجدول تنبيهاتها تلقائيًا حسب موقعك الجغرافي، أو يمكنك تعديل أي وقت صلاة يدويًا هنا.",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(10.dp))
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("تنبيهات الصلوات الخمس التلقائية", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            Switch(
+                checked = enabled,
+                onCheckedChange = { checked ->
+                    enabled = checked
+                    PrayerStore.setNotificationsEnabled(context, checked)
+                    statusMessage = if (checked) "تم تفعيل تنبيهات الصلوات الخمس" else "تم إيقاف تنبيهات الصلوات الخمس"
+                }
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "الموقع الحالي: $locationName",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = {
+                    if (PrayerStore.hasLocationPermission(context)) {
+                        isLocating = true
+                        PrayerStore.refreshLocationFromDevice(context) { _, msg ->
+                            isLocating = false
+                            statusMessage = msg
+                        }
+                    } else {
+                        gpsLauncher.launch(
+                            arrayOf(
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                Manifest.permission.ACCESS_COARSE_LOCATION
+                            )
+                        )
+                    }
+                },
+                enabled = !isLocating,
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 48.dp)
+            ) {
+                Icon(Icons.Default.MyLocation, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(if (isLocating) "جارٍ التحديد..." else "تحديث بالموقع")
+            }
+            OutlinedButton(
+                onClick = { showCityPicker = true },
+                modifier = Modifier.heightIn(min = 48.dp)
+            ) {
+                Icon(Icons.Default.EditLocationAlt, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("مدينة يدوية")
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+        Text("طريقة الحساب", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            PrayerCalculationMethod.entries.forEach { method ->
+                FilterChip(
+                    selected = selectedMethod == method,
+                    onClick = {
+                        selectedMethod = method
+                        PrayerStore.setMethod(context, method)
+                        statusMessage = "تم اختيار: ${method.arabicTitle}"
+                    },
+                    label = { Text(method.arabicTitle, fontSize = 11.sp) }
+                )
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+        Text("تعديل مواقيت الصلوات يدويًا:", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(6.dp))
+        prayers.forEach { item ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable { editingPrayer = item }
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(item.type.arabicName, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    if (item.isManualOverride) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "(يدوي)",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        item.formatted12(),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = "تعديل ${item.type.arabicName}",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(
+            onClick = {
+                PrayerStore.clearAllManualOverrides(context)
+                PrayerAlarmScheduler.scheduleAll(context)
+                statusMessage = "تمت استعادة الحساب التلقائي لجميع الصلوات"
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+        ) {
+            Icon(Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("استعادة التوقيت التلقائي حسب الموقع")
+        }
+
+        statusMessage?.let {
+            Spacer(Modifier.height(8.dp))
+            Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
+        }
+    }
+
+    editingPrayer?.let { prayer ->
+        ManualPrayerEditDialog(
+            prayer = prayer,
+            onDismiss = { editingPrayer = null },
+            onSave = { h, m ->
+                PrayerStore.setManualTime(context, prayer.type, h, m)
+                editingPrayer = null
+                statusMessage = "تم تعديل صلاة ${prayer.type.arabicName} إلى ${String.format("%02d:%02d", h, m)}"
+            },
+            onResetAuto = {
+                PrayerStore.setManualTime(context, prayer.type, null, null)
+                PrayerStore.setOffsetMinutes(context, prayer.type, 0)
+                editingPrayer = null
+                statusMessage = "تمت إعادة صلاة ${prayer.type.arabicName} للتوقيت التلقائي"
+            }
+        )
+    }
+
+    if (showCityPicker) {
+        CityLocationPickerDialog(
+            onDismiss = { showCityPicker = false },
+            onSelectCity = { name, lat, lon ->
+                PrayerStore.setLocation(context, lat, lon, name, isAuto = false)
+                showCityPicker = false
+                statusMessage = "تم ضبط الموقع على: $name"
+            }
+        )
     }
 }

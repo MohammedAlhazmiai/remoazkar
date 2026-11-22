@@ -16,7 +16,7 @@ object ShareUtil {
 
     /** رسالة المشاركة الجاهزة. */
     fun inviteMessage(): String =
-        "تطبيق ريمواذكار — قرآن كريم وأذكار وأدعية ورقية شرعية، مع قارئ ذكي يقرأ لك أي نص.\n" +
+        "تطبيق زاد المسلم — قرآن كريم وأذكار وأدعية ورقية شرعية، مع قارئ ذكي يقرأ لك أي نص.\n" +
             "حمّل التطبيق من هنا: $APP_LINK"
 
     private fun baseIntent(text: String, subject: String): Intent =
@@ -27,7 +27,7 @@ object ShareUtil {
         }
 
     /** مشاركة عامة عبر أي تطبيق (يشمل البلوتوث لأنه ضمن قائمة المشاركة). */
-    fun share(context: Context, text: String, subject: String = "ريمواذكار") {
+    fun share(context: Context, text: String, subject: String = "زاد المسلم") {
         val chooser = Intent.createChooser(baseIntent(text, subject), "مشاركة").apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
@@ -42,7 +42,7 @@ object ShareUtil {
     fun shareWhatsapp(context: Context, text: String) {
         val packages = listOf("com.whatsapp", "com.whatsapp.w4b")
         for (pkg in packages) {
-            val intent = baseIntent(text, "ريمواذكار").apply {
+            val intent = baseIntent(text, "زاد المسلم").apply {
                 setPackage(pkg)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
@@ -63,7 +63,7 @@ object ShareUtil {
     fun shareBluetooth(context: Context, text: String) {
         val packages = listOf("com.android.bluetooth", "com.google.android.bluetooth")
         for (pkg in packages) {
-            val intent = baseIntent(text, "ريمواذكار").apply {
+            val intent = baseIntent(text, "زاد المسلم").apply {
                 setPackage(pkg)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }

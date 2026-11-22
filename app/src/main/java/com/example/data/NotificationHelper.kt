@@ -30,6 +30,8 @@ object NotificationHelper {
     const val CHANNEL_DAILY_SILENT = "rim_daily_silent"
     const val CHANNEL_HUMAN_AZKAR = "rim_human_azkar_v1"
     const val CHANNEL_HUMAN_AZKAR_SILENT = "rim_human_azkar_silent"
+    const val CHANNEL_PRAYERS = "zad_prayers_v1"
+    const val CHANNEL_PRAYERS_SILENT = "zad_prayers_silent"
 
     fun createChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -109,22 +111,52 @@ object NotificationHelper {
             enableVibration(false)
         }
 
+        val prayers = NotificationChannel(
+            CHANNEL_PRAYERS,
+            "مواقيت الصلوات الخمس (بصوت)",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "تنبيهات تلقائية عند حلول مواعيد الصلوات الخمس"
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 500, 250, 500)
+            enableLights(true)
+            setSound(soundUri, audioAttrs)
+        }
+
+        val prayersSilent = NotificationChannel(
+            CHANNEL_PRAYERS_SILENT,
+            "مواقيت الصلوات الخمس (صامتة)",
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = "تنبيهات مواعيد الصلوات الخمس بدون صوت"
+            setSound(null, null)
+            enableVibration(false)
+        }
+
         nm.createNotificationChannel(reminders)
         nm.createNotificationChannel(remindersSilent)
         nm.createNotificationChannel(daily)
         nm.createNotificationChannel(dailySilent)
         nm.createNotificationChannel(humanAzkar)
         nm.createNotificationChannel(humanAzkarSilent)
+        nm.createNotificationChannel(prayers)
+        nm.createNotificationChannel(prayersSilent)
     }
 
     /** يختار القناة المناسبة حسب إعداد الصوت في التطبيق. */
     fun resolveChannel(channel: String, soundEnabled: Boolean): String {
         return when (channel) {
+            CHANNEL_PRAYERS -> if (soundEnabled) CHANNEL_PRAYERS else CHANNEL_PRAYERS_SILENT
+            CHANNEL_PRAYERS_SILENT -> CHANNEL_PRAYERS_SILENT
             CHANNEL_DAILY -> if (soundEnabled) CHANNEL_DAILY else CHANNEL_DAILY_SILENT
             CHANNEL_DAILY_SILENT -> CHANNEL_DAILY_SILENT
             CHANNEL_REMINDERS_SILENT -> CHANNEL_REMINDERS_SILENT
             else -> if (soundEnabled) CHANNEL_REMINDERS else CHANNEL_REMINDERS_SILENT
         }
+    }
+
+    fun showPrayerNotification(context: Context, id: Int, title: String, body: String) {
+        show(context, id, title, body, CHANNEL_PRAYERS)
     }
 
     fun show(context: Context, id: Int, title: String, body: String, channel: String = CHANNEL_REMINDERS) {

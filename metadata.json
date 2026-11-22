@@ -1,6 +1,6 @@
 {
-  "name": "ريمواذكار",
-  "description": "تطبيق ريمواذكار الشامل للأذكار والأدعية وحصن المسلم مع مسبحة إلكترونية وإشعارات ذكية",
+  "name": "زاد المسلم",
+  "description": "تطبيق زاد المسلم الشامل للقرآن الكريم والأذكار ومواقيت الصلاة واتجاه القبلة والمسبحة الإلكترونية",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

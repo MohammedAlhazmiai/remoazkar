@@ -197,7 +197,7 @@ fun HisnChapterScreen(
                                 )
                             }
                             IconButton(onClick = {
-                                ShareUtil.share(context, item.text + "\n\n— ريمواذكار")
+                                ShareUtil.share(context, item.text + "\n\n— زاد المسلم")
                             }) {
                                 Icon(Icons.Default.Share, contentDescription = "مشاركة")
                             }

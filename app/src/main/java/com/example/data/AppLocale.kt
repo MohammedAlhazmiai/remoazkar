@@ -56,7 +56,7 @@ object AppLocale {
 
     /** كل مفاتيح الواجهة المترجمة — العربية هي الأساس. */
     private val base: Map<String, String> = mapOf(
-        "app_name" to "ريمواذكار",
+        "app_name" to "زاد المسلم",
         "menu" to "القائمة",
         "settings" to "الإعدادات",
         "general" to "عام",
@@ -122,7 +122,7 @@ object AppLocale {
     )
 
     private val en: Map<String, String> = mapOf(
-        "app_name" to "Remo Azkar", "menu" to "Menu", "settings" to "Settings",
+        "app_name" to "Zad Al-Muslim", "menu" to "Menu", "settings" to "Settings",
         "general" to "General", "language" to "Language",
         "language_hint" to "Choose the app interface language",
         "screen_mode" to "Screen mode", "day_mode" to "Day", "night_mode" to "Night",
@@ -152,7 +152,7 @@ object AppLocale {
     )
 
     private val fr: Map<String, String> = mapOf(
-        "app_name" to "Remo Azkar", "menu" to "Menu", "settings" to "Paramètres",
+        "app_name" to "Zad Al-Muslim", "menu" to "Menu", "settings" to "Paramètres",
         "general" to "Général", "language" to "Langue",
         "language_hint" to "Choisissez la langue de l'interface",
         "screen_mode" to "Mode d'écran", "day_mode" to "Jour", "night_mode" to "Nuit",
@@ -182,7 +182,7 @@ object AppLocale {
     )
 
     private val es: Map<String, String> = mapOf(
-        "app_name" to "Remo Azkar", "menu" to "Menú", "settings" to "Ajustes",
+        "app_name" to "Zad Al-Muslim", "menu" to "Menú", "settings" to "Ajustes",
         "general" to "General", "language" to "Idioma",
         "language_hint" to "Elige el idioma de la interfaz",
         "screen_mode" to "Modo de pantalla", "day_mode" to "Día", "night_mode" to "Noche",
@@ -212,7 +212,7 @@ object AppLocale {
     )
 
     private val de: Map<String, String> = mapOf(
-        "app_name" to "Remo Azkar", "menu" to "Menü", "settings" to "Einstellungen",
+        "app_name" to "Zad Al-Muslim", "menu" to "Menü", "settings" to "Einstellungen",
         "general" to "Allgemein", "language" to "Sprache",
         "language_hint" to "Sprache der Benutzeroberfläche wählen",
         "screen_mode" to "Bildschirmmodus", "day_mode" to "Tag", "night_mode" to "Nacht",
@@ -242,7 +242,7 @@ object AppLocale {
     )
 
     private val tr: Map<String, String> = mapOf(
-        "app_name" to "Remo Azkar", "menu" to "Menü", "settings" to "Ayarlar",
+        "app_name" to "Zad Al-Muslim", "menu" to "Menü", "settings" to "Ayarlar",
         "general" to "Genel", "language" to "Dil",
         "language_hint" to "Uygulama arayüz dilini seçin",
         "screen_mode" to "Ekran modu", "day_mode" to "Gündüz", "night_mode" to "Gece",
@@ -272,7 +272,7 @@ object AppLocale {
     )
 
     private val ur: Map<String, String> = mapOf(
-        "app_name" to "ریمو اذکار", "menu" to "مینو", "settings" to "ترتیبات",
+        "app_name" to "زاد المسلم", "menu" to "مینو", "settings" to "ترتیبات",
         "general" to "عمومی", "language" to "زبان",
         "language_hint" to "ایپ کی زبان منتخب کریں",
         "screen_mode" to "اسکرین موڈ", "day_mode" to "دن", "night_mode" to "رات",
@@ -302,7 +302,7 @@ object AppLocale {
     )
 
     private val fa: Map<String, String> = mapOf(
-        "app_name" to "ریمو اذکار", "menu" to "منو", "settings" to "تنظیمات",
+        "app_name" to "زاد المسلم", "menu" to "منو", "settings" to "تنظیمات",
         "general" to "عمومی", "language" to "زبان",
         "language_hint" to "زبان رابط برنامه را انتخاب کنید",
         "screen_mode" to "حالت صفحه", "day_mode" to "روز", "night_mode" to "شب",
@@ -332,7 +332,7 @@ object AppLocale {
     )
 
     private val id: Map<String, String> = mapOf(
-        "app_name" to "Remo Azkar", "menu" to "Menu", "settings" to "Pengaturan",
+        "app_name" to "Zad Al-Muslim", "menu" to "Menu", "settings" to "Pengaturan",
         "general" to "Umum", "language" to "Bahasa",
         "language_hint" to "Pilih bahasa antarmuka aplikasi",
         "screen_mode" to "Mode layar", "day_mode" to "Siang", "night_mode" to "Malam",
@@ -362,7 +362,7 @@ object AppLocale {
     )
 
     private val ms: Map<String, String> = mapOf(
-        "app_name" to "Remo Azkar", "menu" to "Menu", "settings" to "Tetapan",
+        "app_name" to "Zad Al-Muslim", "menu" to "Menu", "settings" to "Tetapan",
         "general" to "Umum", "language" to "Bahasa",
         "language_hint" to "Pilih bahasa antara muka aplikasi",
         "screen_mode" to "Mod skrin", "day_mode" to "Siang", "night_mode" to "Malam",
@@ -392,7 +392,7 @@ object AppLocale {
     )
 
     private val ru: Map<String, String> = mapOf(
-        "app_name" to "Remo Azkar", "menu" to "Меню", "settings" to "Настройки",
+        "app_name" to "Zad Al-Muslim", "menu" to "Меню", "settings" to "Настройки",
         "general" to "Общие", "language" to "Язык",
         "language_hint" to "Выберите язык интерфейса",
         "screen_mode" to "Режим экрана", "day_mode" to "День", "night_mode" to "Ночь",
@@ -422,7 +422,7 @@ object AppLocale {
     )
 
     private val bn: Map<String, String> = mapOf(
-        "app_name" to "Remo Azkar", "menu" to "মেনু", "settings" to "সেটিংস",
+        "app_name" to "Zad Al-Muslim", "menu" to "মেনু", "settings" to "সেটিংস",
         "general" to "সাধারণ", "language" to "ভাষা",
         "language_hint" to "অ্যাপের ভাষা নির্বাচন করুন",
         "screen_mode" to "স্ক্রিন মোড", "day_mode" to "দিন", "night_mode" to "রাত",
@@ -452,7 +452,7 @@ object AppLocale {
     )
 
     private val hi: Map<String, String> = mapOf(
-        "app_name" to "Remo Azkar", "menu" to "मेनू", "settings" to "सेटिंग्स",
+        "app_name" to "Zad Al-Muslim", "menu" to "मेनू", "settings" to "सेटिंग्स",
         "general" to "सामान्य", "language" to "भाषा",
         "language_hint" to "ऐप की भाषा चुनें",
         "screen_mode" to "स्क्रीन मोड", "day_mode" to "दिन", "night_mode" to "रात",
@@ -482,7 +482,7 @@ object AppLocale {
     )
 
     private val pt: Map<String, String> = mapOf(
-        "app_name" to "Remo Azkar", "menu" to "Menu", "settings" to "Configurações",
+        "app_name" to "Zad Al-Muslim", "menu" to "Menu", "settings" to "Configurações",
         "general" to "Geral", "language" to "Idioma",
         "language_hint" to "Escolha o idioma da interface",
         "screen_mode" to "Modo de tela", "day_mode" to "Dia", "night_mode" to "Noite",
@@ -512,7 +512,7 @@ object AppLocale {
     )
 
     private val zh: Map<String, String> = mapOf(
-        "app_name" to "Remo Azkar", "menu" to "菜单", "settings" to "设置",
+        "app_name" to "Zad Al-Muslim", "menu" to "菜单", "settings" to "设置",
         "general" to "常规", "language" to "语言",
         "language_hint" to "选择应用界面语言",
         "screen_mode" to "屏幕模式", "day_mode" to "白天", "night_mode" to "夜间",
@@ -542,7 +542,7 @@ object AppLocale {
     )
 
     private val sw: Map<String, String> = mapOf(
-        "app_name" to "Remo Azkar", "menu" to "Menyu", "settings" to "Mipangilio",
+        "app_name" to "Zad Al-Muslim", "menu" to "Menyu", "settings" to "Mipangilio",
         "general" to "Jumla", "language" to "Lugha",
         "language_hint" to "Chagua lugha ya kiolesura",
         "screen_mode" to "Hali ya skrini", "day_mode" to "Mchana", "night_mode" to "Usiku",
