@@ -39,6 +39,7 @@ import androidx.navigation.navArgument
 import com.example.data.AthkarReminderScheduler
 import com.example.data.AppBackgroundStore
 import com.example.data.AppLocale
+import com.example.data.HijriCalendar
 import com.example.data.HisnRepository
 import com.example.data.LocalAppLanguage
 import com.example.data.LocalAppStrings
@@ -122,6 +123,7 @@ class MainActivity : ComponentActivity() {
             ReminderScheduler.scheduleAll(applicationContext)
         }
         runStartupStep("smart reader history") { SmartReaderBus.load(applicationContext) }
+        runStartupStep("hijri offset") { HijriCalendar.initOffset(applicationContext) }
 
         // تحميل بيانات القرآن وحصن المسلم في الذاكرة (خارج الخيط الرئيسي)
         lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {

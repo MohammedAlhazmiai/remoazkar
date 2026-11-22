@@ -67,7 +67,7 @@ fun HomeScreen(
     onFloatingTasbeehClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val hijri = remember { HijriCalendar.today() }
+    val hijri = remember(HijriCalendar.offsetDays) { HijriCalendar.today() }
     val featured = remember(HisnRepository.isLoaded) {
         HisnRepository.ensureLoaded(context)
         HisnRepository.featuredIds().mapNotNull { HisnRepository.chapter(it) }

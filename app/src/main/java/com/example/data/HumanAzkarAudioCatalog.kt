@@ -8,7 +8,7 @@ data class HumanAzkarTrack(
 )
 
 object HumanAzkarAudioCatalog {
-    val tracks: List<HumanAzkarTrack> = (1..28).map { index ->
+    val tracks: List<HumanAzkarTrack> = (1..23).map { index ->
         val suffix = index.toString().padStart(2, '0')
         HumanAzkarTrack(
             index = index,
