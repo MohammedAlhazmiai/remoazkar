@@ -134,7 +134,12 @@ class AudioAzkarPlaybackService : Service() {
                 }
             }
             engine.setSpeechRate(0.95f)
-            engine.setPitch(1.0f)
+            // اختيار صوت عربي ذكوري إن توفّر، وإلا نخفض النبرة لمحاكاة صوت رجل.
+            if (!com.example.data.TtsManager.selectArabicMaleVoice(engine)) {
+                engine.setPitch(0.88f)
+            } else {
+                engine.setPitch(1.0f)
+            }
             engine.setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_MEDIA)

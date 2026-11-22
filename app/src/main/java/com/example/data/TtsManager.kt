@@ -44,6 +44,7 @@ object TtsManager {
     private var initialized = false
     private var rate = 0.95f
     private var pitch = 1.0f
+    private var maleVoiceApplied = false
 
     /** المقاطع الحالية للنص المطلوب قراءته. */
     private var chunks: List<String> = emptyList()
@@ -64,8 +65,13 @@ object TtsManager {
                     if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED) {
                         lastError = "محرّك النطق العربي غير متوفر على هذا الجهاز"
                     } else {
-                        // لا نفرض صوتًا عشوائيًا من قائمة المحرك؛ بذلك يُحترم الصوت
-                        // العربي الذي يختاره المستخدم من إعدادات تحويل النص إلى كلام.
+                        // نختار صوتًا عربيًا ذكوريًا قريبًا من الصوت البشري إن توفّر،
+                        // مع الرجوع بأمان إلى الصوت الافتراضي إذا لم يتوفر صوت ذكوري.
+                        maleVoiceApplied = selectArabicMaleVoice(engine)
+                        if (!maleVoiceApplied) {
+                            // لم نجد صوتًا ذكوريًا صريحًا: نخفض النبرة قليلًا لمحاكاة صوت رجل.
+                            pitch = (pitch * 0.88f).coerceIn(0.6f, 1.0f)
+                        }
                         lastError = null
                     }
                     engine.setSpeechRate(rate.coerceIn(0.82f, 1.15f))
@@ -120,6 +126,54 @@ object TtsManager {
         }
     }
 
+    /**
+     * يختار أفضل صوت عربي ذكوري متاح في محرّك النطق.
+     *
+     * لا يوجد في أندرويد وسمٌ قياسي يحدّد جنس الصوت، لذلك نعتمد على اسم الصوت
+     * (male/female) وعلى بلد اللغة (SA أولًا) وعلى كونه محليًا (يعمل دون إنترنت).
+     * نُرجع true إذا تم تعيين صوت ذكوري، وfalse إذا لم نجد صوتًا موثوقًا.
+     */
+    fun selectArabicMaleVoice(engine: TextToSpeech): Boolean {
+        val voices = try {
+            engine.voices
+        } catch (_: Exception) {
+            null
+        } ?: return false
+
+        val arabic = voices.filter {
+            it.locale != null && it.locale.language.equals("ar", ignoreCase = true)
+        }
+        if (arabic.isEmpty()) return false
+
+        fun score(voice: android.speech.tts.Voice): Int {
+            val name = voice.name.lowercase(Locale.ROOT)
+            val country = voice.locale.country.uppercase(Locale.ROOT)
+            var s = 0
+            // تفضيل صريح للذكوري، ورفض الأنثوي
+            if (name.contains("female") || name.contains("woman") || name.contains("_f_")) s -= 500
+            if (name.contains("male") || name.contains("man") || name.contains("_m_")) s += 300
+            if (country == "SA") s += 120
+            if (country == "EG") s += 60
+            if (name.contains("ar-sa") || name.contains("ar_sa")) s += 80
+            // الصوت المحلي أكثر موثوقية ويعمل دون إنترنت
+            if (!voice.isNetworkConnectionRequired) s += 40
+            // تجنّب الأصوات منخفضة الجودة إن وُسمت
+            if (voice.quality >= android.speech.tts.Voice.QUALITY_HIGH) s += 20
+            return s
+        }
+
+        val best = arabic.maxByOrNull { score(it) } ?: return false
+        val bestScore = score(best)
+        // لا نعتمد إلا على صوت يبدو ذكوريًا بدرجة معقولة.
+        if (bestScore < 100) return false
+        return try {
+            engine.voice = best
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     private fun indexOf(utteranceId: String?): Int {
         if (utteranceId == null) return -1
         return utteranceId.removePrefix("rim-").toIntOrNull() ?: -1
@@ -133,8 +187,10 @@ object TtsManager {
     fun setParams(speechRate: Float, speechPitch: Float) {
         rate = speechRate.coerceIn(0.5f, 1.6f)
         pitch = speechPitch.coerceIn(0.5f, 1.8f)
+        // إن لم يتوفر صوت ذكوري صريح، نخفض النبرة قليلًا لمحاكاة صوت رجل.
+        val effectivePitch = if (maleVoiceApplied) pitch else (pitch * 0.88f).coerceIn(0.55f, 1.2f)
         tts?.setSpeechRate(rate)
-        tts?.setPitch(pitch)
+        tts?.setPitch(effectivePitch)
     }
 
     /**
@@ -146,18 +202,45 @@ object TtsManager {
     private fun cleanForSpeech(raw: String): String {
         var s = raw
 
+        // 1) العبارات الرمزية الشائعة تُنطق كاملة بدل أن تُقرأ رموزًا.
+        s = s.replace("\uFDFA", " صلى الله عليه وسلم ")
+        s = s.replace("\uFDFB", " جل جلاله ")
+        s = s.replace("\u0613", " رضي الله عنه ")
+        s = s.replace("\u0612", " رحمه الله ")
+        s = s.replace("\u0614", " عليه السلام ")
+
+        // 2) الألف المقصورة والياء الصغيرة والألف الخنجرية إلى حروف كاملة.
         s = s.replace('\u06E5', 'و').replace('\u06E6', 'ي')
         s = s.replace('\u0670', 'ا').replace('\u0671', 'ا')
 
+        // 3) حذف رموز الوقف والتجويد وعلامات المصحف (مع إبقاء الحركات).
         s = s.replace(Regex("[\\u06D6-\\u06DC\\u06DE-\\u06ED\\u08F0-\\u08FF\\u0610-\\u061A]"), "")
 
+        // 4) التطويل يُحذف دون كسر الكلمة، والنجمة تصبح فاصلًا.
         s = s.replace('\u0640', ' ')
         s = s.replace("*", " ")
-        s = s.replace(Regex("[\\u06DD\\u06DE\\u06E9\\u06EA\\u06EB\\u06EC]"), " ")
 
+        // 5) رموز الأرباع والأجزاء والأقواس والعلامات الزخرفية إلى فواصل منطوقة.
+        s = s.replace(Regex("[\\u06DD\\u06DE\\u06E9\\u06EA\\u06EB\\u06EC\\u06DE\\u06E9]"), " ")
+        s = s.replace(Regex("[\\uFD3E\\uFD3F\\uFDFC\\uFDFD]"), " ")
+        s = s.replace(Regex("[{}\\[\\]()<>«»\"“”'‘’]"), " ")
+
+        // 6) علامات التشكيل غير الضرورية للفصحى (التعليمات الصوتية الدقيقة).
         s = s.replace(Regex("[\\u0653-\\u0655\\u0656-\\u065F]"), "")
 
-        s = s.replace(Regex("\\s+"), " ")
+        // 7) الأرقام العربية المشرقية والهندية إلى أرقام عربية-هندية يفهمها المحرّك.
+        s = s.replace(Regex("[0-9]")) { m ->
+            val d = m.value[0] - '0'
+            ('\u0660' + d).toString()
+        }
+        s = s.replace(Regex("[\\u06F0-\\u06F9]")) { m ->
+            val d = m.value[0] - '\u06F0'
+            ('\u0660' + d).toString()
+        }
+
+        // 8) تنظيف الفواصل المتكررة والمسافات الزائدة.
+        s = s.replace(Regex("[\\s\\u00A0]+"), " ")
+        s = s.replace(Regex("\\s*([،؛:.!?])\\s*"), "$1 ")
         return s.trim()
     }
 

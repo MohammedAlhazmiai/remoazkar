@@ -21,8 +21,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.PathPassage
+import com.example.data.PathToSuccessArticles
 import com.example.data.PathToSuccessData
-import com.example.data.SourcedText
 import com.example.data.TtsManager
 import com.example.util.ShareUtil
 
@@ -30,9 +31,33 @@ import com.example.util.ShareUtil
 @Composable
 fun PathToSuccessScreen(onBackClick: () -> Unit) {
     val context = LocalContext.current
-    val uriHandler = LocalUriHandler.current
     var selectedId by rememberSaveable { mutableStateOf(PathToSuccessData.sections.first().id) }
-    val currentSection = PathToSuccessData.sections.firstOrNull { it.id == selectedId } ?: PathToSuccessData.sections.first()
+    val currentSection = PathToSuccessData.sections.firstOrNull { it.id == selectedId }
+        ?: PathToSuccessData.sections.first()
+    val passages = remember(currentSection.id) { PathToSuccessArticles.passagesFor(currentSection.id) }
+    // دمج النص المُرسل داخل الصفحة نفسها: مقدمة ← محطات ← آية ← نصوص موثقة ← حديث ← رسالة ختامية
+    val closingPassage = passages.lastOrNull()?.takeIf { it.heading.contains("ختامية") }
+    val bodyPassages = if (closingPassage != null) passages.dropLast(1) else passages
+    val introPassage = bodyPassages.firstOrNull()
+    val stationPassages = bodyPassages.drop(1)
+
+    // النص الكامل المدمج (المحتوى التحريري الجديد + النصوص الموثقة القديمة) يُستخدم للمشاركة والقراءة الصوتية.
+    fun buildFullText(): String {
+        val articleText = passages.joinToString("\n\n") { passage ->
+            if (passage.heading.isBlank()) passage.body else "${passage.heading}\n${passage.body}"
+        }
+        val paragraphSources = currentSection.paragraphs.joinToString("\n") {
+            "المصدر: ${it.source} — ${it.url}"
+        }
+        val hadithSource =
+            "\n\nالحديث: ${currentSection.hadith.text}\nالمصدر: ${currentSection.hadith.source} — ${currentSection.hadith.url}"
+        return "${currentSection.title}\n\n${currentSection.subtitle}\n\n${currentSection.summary}\n\n" +
+            articleText +
+            "\n\nالآية (${currentSection.quranReference}): ${currentSection.quranAyah}" +
+            "\nالمصدر: ${currentSection.quranUrl}\n\n" +
+            currentSection.paragraphs.joinToString("\n\n") { it.text } +
+            "\n\n$paragraphSources$hadithSource"
+    }
 
     Scaffold(
         topBar = {
@@ -44,17 +69,7 @@ fun PathToSuccessScreen(onBackClick: () -> Unit) {
                     }
                 },
                 actions = {
-                    IconButton(onClick = {
-                        val paragraphSources = currentSection.paragraphs.joinToString("\n") {
-                            "المصدر: ${it.source} — ${it.url}"
-                        }
-                        val hadithSource = "\n\nالحديث: ${currentSection.hadith.text}\nالمصدر: ${currentSection.hadith.source} — ${currentSection.hadith.url}"
-                        val fullText = "${currentSection.title}\n\n${currentSection.subtitle}\n\n" +
-                            currentSection.paragraphs.joinToString("\n\n") { it.text } +
-                            "\n\nالآية (${currentSection.quranReference}): ${currentSection.quranAyah}" +
-                            "\nالمصدر: ${currentSection.quranUrl}\n\n$paragraphSources$hadithSource"
-                        ShareUtil.share(context, fullText)
-                    }) {
+                    IconButton(onClick = { ShareUtil.share(context, buildFullText()) }) {
                         Icon(Icons.Default.Share, contentDescription = "مشاركة")
                     }
                 },
@@ -100,7 +115,7 @@ fun PathToSuccessScreen(onBackClick: () -> Unit) {
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                item {
+                item(key = "hero-${currentSection.id}") {
                     Card(
                         shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(containerColor = Color(0xFF174B3B))
@@ -127,11 +142,7 @@ fun PathToSuccessScreen(onBackClick: () -> Unit) {
                             )
                             Spacer(Modifier.height(10.dp))
                             FilledTonalButton(
-                                onClick = {
-                                    val speech = "${currentSection.title}. ${currentSection.subtitle}. " +
-                                        currentSection.paragraphs.joinToString(". ") { it.text }
-                                    TtsManager.toggle(speech)
-                                },
+                                onClick = { TtsManager.toggle(buildFullText()) },
                                 colors = ButtonDefaults.filledTonalButtonColors(
                                     containerColor = Color(0xFFFFD36A),
                                     contentColor = Color(0xFF123B31)
@@ -148,7 +159,22 @@ fun PathToSuccessScreen(onBackClick: () -> Unit) {
                     }
                 }
 
-                item {
+                // مقدمة الصفحة المدمجة
+                introPassage?.let { passage ->
+                    item(key = "intro-${currentSection.id}") {
+                        ArticlePassageCard(passage)
+                    }
+                }
+
+                // محطات الرحلة المدمجة داخل الصفحة نفسها
+                items(
+                    items = stationPassages,
+                    key = { "passage-${currentSection.id}-${it.heading.hashCode()}-${it.body.hashCode()}" }
+                ) { passage ->
+                    ArticlePassageCard(passage)
+                }
+
+                item(key = "ayah-${currentSection.id}") {
                     Card(
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
@@ -236,6 +262,42 @@ fun PathToSuccessScreen(onBackClick: () -> Unit) {
                         }
                     }
                 }
+                closingPassage?.let { passage ->
+                    item(key = "closing-${currentSection.id}") {
+                        ArticlePassageCard(passage)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArticlePassageCard(passage: PathPassage) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            if (passage.heading.isNotBlank()) {
+                Text(
+                    text = passage.heading,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    lineHeight = 26.sp
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+            Text(
+                text = passage.body,
+                fontSize = 16.sp,
+                lineHeight = 30.sp,
+                textAlign = TextAlign.Start,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            if (passage.source.isNotBlank()) {
+                SourceLink(label = "المصدر: ${passage.source}", url = passage.url)
             }
         }
     }
@@ -248,7 +310,7 @@ private fun SourceLink(label: String, url: String) {
         text = label,
         modifier = Modifier
             .padding(top = 8.dp)
-            .clickable { runCatching { uriHandler.openUri(url) } },
+            .clickable { if (url.isNotBlank()) runCatching { uriHandler.openUri(url) } },
         color = MaterialTheme.colorScheme.primary,
         fontSize = 12.sp,
         lineHeight = 18.sp,

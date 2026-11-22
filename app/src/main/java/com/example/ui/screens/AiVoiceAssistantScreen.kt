@@ -260,7 +260,7 @@ fun AiVoiceAssistantScreen(
                     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("اختيار صوت القارئ", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         Text(
-                            "يعتمد النطق على محرك تحويل النص إلى كلام في جهازك، وهو صوت اصطناعي وليس تسجيل تلاوة بشرية، ولا يضمن أحكام التجويد. يمكنك تثبيت صوت عربي رجالي واختياره من إعدادات الجهاز إذا كان متاحًا.",
+                            "يعتمد النطق على محرك تحويل النص إلى كلام في جهازك، ويحاول التطبيق اختيار صوت عربي رجالي تلقائيًا لنطق فصيح وأقرب للصوت البشري. النطق اصطناعي وليس تسجيل تلاوة بشرية، ولا يضمن أحكام التجويد. يمكنك تثبيت صوت عربي رجالي أو تغييره من إعدادات الجهاز إذا كان متاحًا.",
                             fontSize = 12.sp,
                             lineHeight = 19.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
