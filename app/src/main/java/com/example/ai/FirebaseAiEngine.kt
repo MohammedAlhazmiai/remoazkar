@@ -2,6 +2,8 @@ package com.example.ai
 
 import android.content.Context
 import android.graphics.BitmapFactory
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.util.Log
 import com.google.firebase.Firebase
@@ -16,6 +18,15 @@ object FirebaseAiEngine {
         Firebase.ai.generativeModel("gemini-3.5-flash-lite")
     }
 
+    private fun isNetworkAvailable(context: Context): Boolean {
+        return runCatching {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            val network = cm?.activeNetwork ?: return false
+            val caps = cm.getNetworkCapabilities(network) ?: return false
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        }.getOrDefault(false)
+    }
+
     suspend fun generateGenerativeReply(
         context: Context?,
         query: String,
@@ -23,9 +34,9 @@ object FirebaseAiEngine {
         attachmentUri: String,
         recentMessages: List<com.example.data.ai.AiMessageEntity>
     ): String? {
-        if (context == null) return null
+        if (context == null || !isNetworkAvailable(context)) return null
         return try {
-            withTimeout(45_000L) {
+            withTimeout(35_000L) {
                 val promptText = buildString {
                     append("أنت المساعد الإسلامي الذكي التوليدي المدرب باحترافية عالية. تقتصر مهامك حصراً على العلوم والمسائل الدينية، الفتاوى، الرؤى والأحلام، الخطب والخواطر، والاستدلال بالقرآن والسنة.\n")
                     if (attachmentType == "image") {
@@ -66,7 +77,7 @@ object FirebaseAiEngine {
                 response.text?.trim()
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Firebase AI Logic inference failed", e)
+            Log.e(TAG, "Firebase AI Logic cloud inference failed, falling back to local engine", e)
             null
         }
     }

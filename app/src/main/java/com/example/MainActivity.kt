@@ -118,9 +118,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // التهيئة الإلزامية لـ Firebase App Check قبل أي عملية سحابية أو محرك ذكاء اصطناعي
-        AppCheckInitializer.configureAppCheck(this, intent)
-
         preferencesManager = PreferencesManager(applicationContext)
 
         // معالجة الدخول من اختصارات المشغّل (المسبحة العائمة / حاسبة العمر / الأذكار الصوتية)
