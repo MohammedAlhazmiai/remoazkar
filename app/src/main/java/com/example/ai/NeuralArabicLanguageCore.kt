@@ -117,6 +117,9 @@ object NeuralArabicLanguageCore {
             ),
             IslamicIntent.CHAT_QA to encodeDenseVector(
                 "ما دليل اية قرانية حديث نبوي فضل سورة قصص الانبياء اركان الاسلام استجابة الدعاء السيرة"
+            ),
+            IslamicIntent.IMAGE_DESIGN to encodeDenseVector(
+                "صمم بطاقة دعوية اسلامية ولد صورة جمعة مباركة تصميم بطاقة اية قرانية حديث شريف خلفية اسلامية"
             )
         )
     }

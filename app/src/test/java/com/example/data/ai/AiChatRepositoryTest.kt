@@ -149,4 +149,31 @@ class AiChatRepositoryTest {
         // إخفاء عند ضغط المستخدم على زر إخفاء
         assertFalse(IslamicAiViewModel.shouldShowSupportPrompt(msgs, 3, setOf(4L)))
     }
+
+    @Test
+    fun saveExchangeWithAttachmentsPersistsAttachmentFields() = runBlocking {
+        val dao = FakeAiChatDao()
+        val repo = AiChatRepository(dao)
+        val convId = repo.createConversation("محادثة وسائط", "وسائط")
+
+        repo.saveExchange(
+            conversationId = convId,
+            userText = "استفسار حول هذه الصورة",
+            assistantText = "تم تحليل الصورة بنجاح وتبيان الحكم الشرعي",
+            categoryTag = "قراءة صورة دينية",
+            referencesSummary = "الحج: 32",
+            followUps = listOf("أعطني دليلا إضافيا"),
+            userAttachmentType = "image",
+            userAttachmentUri = "content://media/external/images/media/42",
+            assistantAttachmentType = "card",
+            assistantAttachmentUri = "/cache/card_123.png"
+        )
+
+        val messages = repo.observeMessages(convId).first()
+        assertEquals(2, messages.size)
+        assertEquals("image", messages[0].attachmentType)
+        assertEquals("content://media/external/images/media/42", messages[0].attachmentUri)
+        assertEquals("card", messages[1].attachmentType)
+        assertEquals("/cache/card_123.png", messages[1].attachmentUri)
+    }
 }

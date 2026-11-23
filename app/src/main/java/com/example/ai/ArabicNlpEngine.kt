@@ -11,6 +11,7 @@ enum class IslamicIntent(val arabicLabel: String) {
     KHUTBAH("خطبة منبرية"),
     LECTURE("محاضرة ودرس دعوي"),
     CHAT_QA("دردشة واستدلال ديني"),
+    IMAGE_DESIGN("تصميم بطاقة دعوية"),
     FOLLOW_UP("متابعة السياق")
 }
 
@@ -146,6 +147,7 @@ object ArabicNlpEngine {
             IslamicIntent.LECTURE to scoreSignals(norm, LECTURE_SIGNALS, exactBonus = 5),
             IslamicIntent.LETTER to scoreSignals(norm, LETTER_SIGNALS, exactBonus = 4),
             IslamicIntent.KHATIRA to scoreSignals(norm, KHATIRA_SIGNALS, exactBonus = 5),
+            IslamicIntent.IMAGE_DESIGN to scoreSignals(norm, IMAGE_DESIGN_SIGNALS, exactBonus = 6),
             IslamicIntent.FATWA to scoreSignals(norm, FATWA_SIGNALS, exactBonus = 3),
             IslamicIntent.CHAT_QA to scoreSignals(norm, QA_SIGNALS, exactBonus = 2)
         )
@@ -301,5 +303,11 @@ object ArabicNlpEngine {
     private val QA_SIGNALS = listOf(
         "دليل", "استدلال", "ايه قرانيه", "حديث", "حديث نبوي", "فضل", "معني", "ما هي اركان",
         "سوره", "تفسير ايه", "دعاء", "السيره", "الصحابه", "قصه"
+    )
+
+    private val IMAGE_DESIGN_SIGNALS = listOf(
+        "صمم بطاقه", "صمم لي بطاقه", "ولد صوره", "ولد لي صوره", "صمم صوره", "بطاقه دعويه",
+        "بطاقه جمعه", "بطاقه اذكار", "بطاقه دعاء", "لوحه اسلاميه", "تصميم اسلامي", "صوره دينيه",
+        "صمم بطاقه ايه", "صمم بطاقه حديث", "صوره جمعه مباركه", "تصميم بطاقه"
     )
 }

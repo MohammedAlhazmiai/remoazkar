@@ -159,10 +159,25 @@ class IslamicAiViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun sendMessage(rawInput: String) {
+    fun sendMessage(
+        rawInput: String,
+        attachmentType: String = "",
+        attachmentUri: String = ""
+    ) {
         val clean = rawInput.trim()
-        if (clean.isEmpty() || isGeneratingFlow.value) return
+        if (clean.isEmpty() && attachmentUri.isEmpty()) return
+        if (isGeneratingFlow.value) return
         userChangedConversation = true
+
+        val displayUserText = if (clean.isNotBlank()) {
+            clean
+        } else if (attachmentType == "image") {
+            "طلب استفسار حول صورة مرفوعة"
+        } else if (attachmentType == "audio") {
+            "طلب استفسار عبر تسجيل صوتي مرفوع"
+        } else {
+            "طلب"
+        }
 
         viewModelScope.launch {
             isGeneratingFlow.value = true
@@ -178,7 +193,7 @@ class IslamicAiViewModel(application: Application) : AndroidViewModel(applicatio
 
                     val targetConvId = activeConversationIdFlow.value
                         ?: repository.createConversation(
-                            title = clean.replace('\n', ' ').take(42),
+                            title = displayUserText.replace('\n', ' ').take(42),
                             categoryTag = "محادثة إسلامية"
                         )
                     activeConversationIdFlow.value = targetConvId
@@ -187,16 +202,23 @@ class IslamicAiViewModel(application: Application) : AndroidViewModel(applicatio
                     val reply = IslamicAiModel.generateReply(
                         query = clean,
                         entries = loadedEntries,
-                        recentMessages = recentHistory
+                        recentMessages = recentHistory,
+                        context = getApplication(),
+                        userAttachmentType = attachmentType,
+                        userAttachmentUri = attachmentUri
                     )
 
                     repository.saveExchange(
                         conversationId = targetConvId,
-                        userText = clean,
+                        userText = displayUserText,
                         assistantText = reply.text,
                         categoryTag = reply.domainTag,
                         referencesSummary = reply.references.joinToString(" • "),
-                        followUps = reply.followUps
+                        followUps = reply.followUps,
+                        userAttachmentType = attachmentType,
+                        userAttachmentUri = attachmentUri,
+                        assistantAttachmentType = reply.attachmentType,
+                        assistantAttachmentUri = reply.attachmentUri
                     )
                     targetConvId to reply
                 }

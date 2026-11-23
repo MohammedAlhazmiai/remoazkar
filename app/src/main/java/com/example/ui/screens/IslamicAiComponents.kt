@@ -12,40 +12,28 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.Forum
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.OfflinePin
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
@@ -57,202 +45,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.data.ai.AiChatRepository
-import com.example.data.ai.AiConversationEntity
 import com.example.data.ai.AiMessageEntity
 import com.example.util.ShareUtil
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-
-@Composable
-fun AiConversationsDrawerSheet(
-    conversations: List<AiConversationEntity>,
-    activeConversationId: Long?,
-    onNewChatClick: () -> Unit,
-    onSelectConversation: (Long) -> Unit,
-    onDeleteConversation: (Long) -> Unit
-) {
-    val dateFormat = remember { SimpleDateFormat("dd/MM HH:mm", Locale("ar")) }
-
-    ModalDrawerSheet(
-        modifier = Modifier.widthIn(max = 320.dp),
-        drawerContainerColor = MaterialTheme.colorScheme.surface
-    ) {
-        Column(modifier = Modifier.fillMaxHeight()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        Brush.linearGradient(
-                            listOf(Color(0xFF0F2E24), Color(0xFF1A4B3B))
-                        )
-                    )
-                    .padding(horizontal = 16.dp, vertical = 18.dp)
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(Color(0x33FFD36A)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.AutoAwesome,
-                                contentDescription = null,
-                                tint = Color(0xFFFFD36A)
-                            )
-                        }
-                        Spacer(Modifier.width(10.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                "سجل المحادثات المحفوظة",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp
-                            )
-                            Text(
-                                "حفظ محلي على جهازك بدون إنترنت",
-                                color = Color(0xFFD5E8DD),
-                                fontSize = 11.sp
-                            )
-                        }
-                    }
-                    Button(
-                        onClick = onNewChatClick,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .minimumInteractiveComponentSize()
-                            .testTag("drawer_new_chat_button"),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFFFD36A),
-                            contentColor = Color(0xFF102A21)
-                        )
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("محادثة جديدة +", fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-
-            if (conversations.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .padding(24.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            Icons.Default.Forum,
-                            contentDescription = null,
-                            modifier = Modifier.size(40.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "لا توجد محادثات محفوظة بعد",
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            "ابدأ سؤالك وسيتم حفظ المحادثة تلقائيًا هنا لتعود إليها في أي وقت.",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                        )
-                    }
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(conversations, key = { it.id }) { item ->
-                        val selected = item.id == activeConversationId
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onSelectConversation(item.id) }
-                                .testTag("drawer_conversation_${item.id}"),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (selected) {
-                                    MaterialTheme.colorScheme.primaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
-                                }
-                            )
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = 12.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        text = item.title,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    if (item.previewText.isNotBlank()) {
-                                        Text(
-                                            text = item.previewText,
-                                            fontSize = 11.sp,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    Spacer(Modifier.height(4.dp))
-                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        Text(
-                                            text = item.categoryTag,
-                                            fontSize = 10.sp,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                        Text(
-                                            text = "• ${dateFormat.format(Date(item.updatedAt))}",
-                                            fontSize = 10.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                                IconButton(
-                                    onClick = { onDeleteConversation(item.id) },
-                                    modifier = Modifier.minimumInteractiveComponentSize()
-                                ) {
-                                    Icon(
-                                        Icons.Default.DeleteOutline,
-                                        contentDescription = "حذف المحادثة",
-                                        tint = MaterialTheme.colorScheme.error
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
+import java.io.File
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -265,6 +73,7 @@ fun AiMessageBubble(
     onShare: (String) -> Unit,
     onShareWhatsapp: (String) -> Unit = {},
     onShareBluetooth: (String) -> Unit = {},
+    onSaveToPhone: (AiMessageEntity) -> Unit = {},
     onFollowUpClick: (String) -> Unit,
     onSupportDeveloperClick: () -> Unit = {},
     onShareApp: () -> Unit = {}
@@ -281,6 +90,7 @@ fun AiMessageBubble(
     }
     var topShareMenuExpanded by remember(message.id) { mutableStateOf(false) }
     var bottomShareMenuExpanded by remember(message.id) { mutableStateOf(false) }
+    var fullImagePreviewUrl by remember { mutableStateOf<String?>(null) }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -308,12 +118,12 @@ fun AiMessageBubble(
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Row(
                             modifier = Modifier.weight(1f),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             if (message.categoryTag.isNotBlank()) {
                                 Surface(
@@ -322,7 +132,7 @@ fun AiMessageBubble(
                                 ) {
                                     Text(
                                         text = message.categoryTag,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
                                         fontSize = 10.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         maxLines = 1,
@@ -334,12 +144,12 @@ fun AiMessageBubble(
                             Icon(
                                 Icons.Default.OfflinePin,
                                 contentDescription = "إجابة محلية بدون إنترنت",
-                                modifier = Modifier.size(14.dp),
+                                modifier = Modifier.size(13.dp),
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
 
-                        // زر النسخ والمشاركة السريعة بجانب رأس الرد مباشرة
+                        // أزرار النسخ والحفظ والمشاركة السريعة بجانب رأس الرد مباشرة
                         ReplyActionChip(
                             icon = Icons.Default.ContentCopy,
                             label = "نسخ",
@@ -347,11 +157,18 @@ fun AiMessageBubble(
                             testTag = "ai_copy_reply_button",
                             onClick = { onCopy(plainContent) }
                         )
+                        ReplyActionChip(
+                            icon = Icons.Default.Download,
+                            label = "حفظ",
+                            contentDescription = "حفظ الرد أو البطاقة في ذاكرة الهاتف",
+                            testTag = "ai_save_reply_button",
+                            onClick = { onSaveToPhone(message) }
+                        )
                         Box {
                             ReplyActionChip(
                                 icon = Icons.Default.Share,
                                 label = "مشاركة",
-                                contentDescription = "مشاركة رد المساعد عبر واتساب أو البرامج أو البلوتوث",
+                                contentDescription = "مشاركة الرد عبر واتساب وتطبيقات التواصل أو البلوتوث",
                                 testTag = "ai_share_reply_button",
                                 onClick = { topShareMenuExpanded = true }
                             )
@@ -365,6 +182,64 @@ fun AiMessageBubble(
                         }
                     }
                     Spacer(Modifier.height(8.dp))
+                }
+
+                // عرض المرفق إذا وُجد (صورة أو بطاقة إسلامية أو تسجيل صوتي)
+                if (message.attachmentUri.isNotBlank()) {
+                    if (message.attachmentType == "card" || message.attachmentType == "image") {
+                        val imageSource = if (message.attachmentUri.startsWith("/") && !message.attachmentUri.startsWith("file://")) {
+                            File(message.attachmentUri)
+                        } else {
+                            message.attachmentUri
+                        }
+                        Card(
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { fullImagePreviewUrl = message.attachmentUri }
+                                .padding(bottom = 8.dp)
+                        ) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data(imageSource)
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = "معاينة البطاقة أو الصورة الإسلامية",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(200.dp)
+                                    .clip(RoundedCornerShape(12.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    } else if (message.attachmentType == "audio") {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isUser) Color(0x33FFFFFF) else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.GraphicEq,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = if (isUser) Color.White else MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    "تسجيل صوتي مرفق",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = if (isUser) Color.White else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
                 }
 
                 SelectionContainer {
@@ -392,7 +267,7 @@ fun AiMessageBubble(
                     Spacer(Modifier.height(8.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.End),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         ReplyActionChip(
@@ -401,6 +276,13 @@ fun AiMessageBubble(
                             contentDescription = "الاستماع إلى رد المساعد",
                             testTag = "ai_speak_reply_bottom",
                             onClick = { onSpeak(plainContent) }
+                        )
+                        ReplyActionChip(
+                            icon = Icons.Default.Download,
+                            label = "حفظ",
+                            contentDescription = "حفظ الرد أو البطاقة في الهاتف",
+                            testTag = "ai_save_reply_bottom",
+                            onClick = { onSaveToPhone(message) }
                         )
                         ReplyActionChip(
                             icon = Icons.Default.ContentCopy,
@@ -460,6 +342,39 @@ fun AiMessageBubble(
             }
         }
     }
+
+    // نافذة تكبير الصورة عند الضغط عليها
+    fullImagePreviewUrl?.let { previewPath ->
+        Dialog(onDismissRequest = { fullImagePreviewUrl = null }) {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    val src = if (previewPath.startsWith("/") && !previewPath.startsWith("file://")) {
+                        File(previewPath)
+                    } else {
+                        previewPath
+                    }
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(src)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = "عرض البطاقة بحجم كامل",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(340.dp)
+                            .clip(RoundedCornerShape(12.dp)),
+                        contentScale = ContentScale.Fit
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -479,19 +394,19 @@ private fun ReplyActionChip(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(3.dp)
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = contentDescription,
-                modifier = Modifier.size(14.dp),
+                modifier = Modifier.size(13.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
             Text(
                 text = label,
-                fontSize = 11.sp,
+                fontSize = 10.5.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
             )

@@ -146,4 +146,20 @@ class IslamicAiModelTest {
         assertEquals(IslamicIntent.APPRECIATION.arabicLabel, thanksReply.domainTag)
         assertTrue(thanksReply.text.contains("وجزاك الله خيرًا"))
     }
+
+    @Test
+    fun guardrailInterceptsSecularTaskAndApologizes() {
+        val rejected = IslamicAiModel.generateReply("اكتب كود بايثون لفرز مصفوفة ارقام", corpus)
+        assertEquals("اعتذار واقتصار شرعي", rejected.domainTag)
+        assertTrue(rejected.text.contains("أعتذر منك أخي الكريم، أنا مساعد إسلامي متخصص ومقتصر"))
+        assertTrue(rejected.text.contains("لا يمكنني الإجابة أو المساعدة في موضوعات خارج هذا النطاق"))
+    }
+
+    @Test
+    fun imageDesignIntentRecognizedAndGeneratesSpec() {
+        assertEquals(IslamicIntent.IMAGE_DESIGN, ArabicNlpEngine.detectIntent("صمم لي بطاقة دعوية إسلامية عن يوم الجمعة", false))
+        val cardReply = IslamicAiModel.generateReply("صمم لي بطاقة دعوية إسلامية عن يوم الجمعة", corpus)
+        assertEquals(IslamicIntent.IMAGE_DESIGN.arabicLabel, cardReply.domainTag)
+        assertTrue(cardReply.text.contains("تصميم البطاقة الدعوية الإسلامية"))
+    }
 }

@@ -36,5 +36,7 @@ data class AiMessageEntity(
     val categoryTag: String = "",
     val referencesSummary: String = "",
     val followUpsSerialized: String = "",
+    val attachmentType: String = "", // "image", "audio", "card"
+    val attachmentUri: String = "",
     val timestamp: Long = System.currentTimeMillis()
 )

@@ -11,7 +11,9 @@ data class IslamicAiResponse(
     val domainTag: String,
     val detectedTopic: String,
     val references: List<String>,
-    val followUps: List<String>
+    val followUps: List<String>,
+    val attachmentType: String = "",
+    val attachmentUri: String = ""
 )
 
 /**
@@ -32,9 +34,39 @@ object IslamicAiModel {
     fun generateReply(
         query: String,
         entries: List<CorpusEntry>,
-        recentMessages: List<AiMessageEntity> = emptyList()
+        recentMessages: List<AiMessageEntity> = emptyList(),
+        context: Context? = null,
+        userAttachmentType: String = "",
+        userAttachmentUri: String = ""
     ): IslamicAiResponse {
         val cleanQuery = query.trim()
+
+        // 1. فحص درع الانضباط الشرعي: المساعد مقتصر على المهام الإسلامية الدينية ويعتذر عن غيرها
+        val isAllowed = userAttachmentType.isNotBlank() ||
+            IslamicGuardrail.isAllowedQuery(cleanQuery, hasPriorContext = recentMessages.isNotEmpty())
+        if (cleanQuery.isNotBlank() && !isAllowed) {
+            return IslamicAiResponse(
+                text = IslamicGuardrail.APOLOGY_RESPONSE,
+                domainTag = "اعتذار واقتصار شرعي",
+                detectedTopic = "اعتذار واقتصار على العلوم الدينية",
+                references = emptyList(),
+                followUps = listOf(
+                    "ما حكم سجود السهو في الصلاة؟",
+                    "اكتب لي خطبة جمعة عن بر الوالدين",
+                    "فسر لي حلم المطر في المنام",
+                    "صمم لي بطاقة جمعة مباركة"
+                )
+            )
+        }
+
+        // 2. معالجة الصور والتسجيلات المرفوعة
+        if (userAttachmentType == "image" && (cleanQuery.isBlank() || IslamicAiMultimodalHandler.isGenericMediaInquiry(cleanQuery))) {
+            return IslamicAiMultimodalHandler.composeImageAnalysisReply(cleanQuery, userAttachmentUri, context, entries)
+        }
+        if (userAttachmentType == "audio" && (cleanQuery.isBlank() || IslamicAiMultimodalHandler.isGenericMediaInquiry(cleanQuery))) {
+            return IslamicAiMultimodalHandler.composeAudioAnalysisReply(cleanQuery, userAttachmentUri, context, entries)
+        }
+
         if (cleanQuery.isBlank()) {
             return greetingResponse()
         }
@@ -48,6 +80,7 @@ object IslamicAiModel {
         return when (intent) {
             IslamicIntent.GREETING -> greetingResponse()
             IslamicIntent.APPRECIATION -> appreciationResponse()
+            IslamicIntent.IMAGE_DESIGN -> IslamicAiMultimodalHandler.composeImageDesignReply(cleanQuery, context, entries)
             IslamicIntent.FOLLOW_UP -> handleFollowUp(cleanQuery, entries, lastUserMsg, lastAssistantMsg)
             IslamicIntent.DREAMS -> composeDreamReply(cleanQuery, entries)
             IslamicIntent.LETTER -> composeCreativeReply(cleanQuery, IslamicIntent.LETTER, "letters", entries)

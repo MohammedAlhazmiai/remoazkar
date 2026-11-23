@@ -38,7 +38,11 @@ class AiChatRepository(private val dao: AiChatDao) {
         assistantText: String,
         categoryTag: String,
         referencesSummary: String,
-        followUps: List<String>
+        followUps: List<String>,
+        userAttachmentType: String = "",
+        userAttachmentUri: String = "",
+        assistantAttachmentType: String = "",
+        assistantAttachmentUri: String = ""
     ) {
         val now = System.currentTimeMillis()
         val existing = dao.getConversationById(conversationId)
@@ -47,6 +51,8 @@ class AiChatRepository(private val dao: AiChatDao) {
                 conversationId = conversationId,
                 role = ROLE_USER,
                 content = userText,
+                attachmentType = userAttachmentType,
+                attachmentUri = userAttachmentUri,
                 timestamp = now
             )
         )
@@ -58,6 +64,8 @@ class AiChatRepository(private val dao: AiChatDao) {
                 categoryTag = categoryTag,
                 referencesSummary = referencesSummary,
                 followUpsSerialized = followUps.joinToString(FOLLOWUP_SEPARATOR),
+                attachmentType = assistantAttachmentType,
+                attachmentUri = assistantAttachmentUri,
                 timestamp = now + 1L
             )
         )

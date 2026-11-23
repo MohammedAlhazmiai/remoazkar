@@ -1,7 +1,14 @@
 package com.example.ui.screens
 
+import android.app.Activity
+import android.content.Intent
+import android.net.Uri
+import android.speech.RecognizerIntent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -34,8 +41,8 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Forum
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.OfflinePin
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -77,24 +84,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.TtsManager
 import com.example.ui.viewmodel.IslamicAiViewModel
+import com.example.util.MediaExportHelper
 import com.example.util.ShareUtil
 import kotlinx.coroutines.launch
+import java.io.File
 
-private data class QuickCapabilityPrompt(
-    val category: String,
-    val prompt: String
-)
 
-private val QUICK_PROMPTS = listOf(
-    QuickCapabilityPrompt("رسالة دينية", "اكتب رسالة دينية للتهنئة بحلول رمضان"),
-    QuickCapabilityPrompt("خاطرة إيمانية", "اكتب خاطرة إيمانية عن التوكل والفرج بعد الضيق"),
-    QuickCapabilityPrompt("خطبة جمعة", "اكتب خطبة جمعة كاملة عن تقوى الله وبر الوالدين"),
-    QuickCapabilityPrompt("محاضرة دعوية", "أعد محاضرة منظمة عن تزكية النفس واغتنام العمر"),
-    QuickCapabilityPrompt("فتوى فقهية", "ما حكم بخاخ الربو وقطرة العين في نهار رمضان؟"),
-    QuickCapabilityPrompt("تفسير حلم", "حلمت أني أطير تحت المطر وقرأت القرآن"),
-    QuickCapabilityPrompt("سجود السهو", "متى يكون سجود السهو قبل السلام ومتى يكون بعده؟"),
-    QuickCapabilityPrompt("كفارة اليمين", "ما كفارة اليمين بالله ومتى يجوز صيام ثلاثة أيام؟")
-)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -108,7 +103,65 @@ fun IslamicAiScreen(
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+
     var inputText by rememberSaveable { mutableStateOf("") }
+    var pendingAttachmentType by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingAttachmentUri by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingAttachmentName by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // لاقط الصوت لتحويل الكلام العامي والفصيح إلى نص
+    val speechLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val spoken = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+            if (!spoken.isNullOrBlank()) {
+                val attachType = pendingAttachmentType.orEmpty()
+                val attachUri = pendingAttachmentUri.orEmpty()
+                pendingAttachmentType = null
+                pendingAttachmentUri = null
+                pendingAttachmentName = null
+                inputText = ""
+                viewModel.sendMessage(spoken, attachType, attachUri)
+            }
+        }
+    }
+
+    // لاقط الصور من الهاتف (Photo Picker القياسي بدون أذونات موسعة)
+    val pickPhotoLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            pendingAttachmentType = "image"
+            pendingAttachmentUri = uri.toString()
+            pendingAttachmentName = MediaExportHelper.getFileName(context, uri)
+        }
+    }
+
+    // لاقط الملفات الصوتية من ذاكرة الهاتف
+    val pickAudioLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            pendingAttachmentType = "audio"
+            pendingAttachmentUri = uri.toString()
+            pendingAttachmentName = MediaExportHelper.getFileName(context, uri)
+        }
+    }
+
+    val onMicClick: () -> Unit = {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ar-SA")
+            putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", arrayOf("ar"))
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "تفضل بالتحدث بسؤالك أو طلبك الديني...")
+        }
+        runCatching {
+            speechLauncher.launch(intent)
+        }.onFailure {
+            Toast.makeText(context, "ميزة التعرف على الصوت غير متاحة على هذا الجهاز", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     BackHandler(enabled = drawerState.isOpen) {
         scope.launch { drawerState.close() }
@@ -122,9 +175,18 @@ fun IslamicAiScreen(
 
     val submitCurrent: () -> Unit = {
         val text = inputText.trim()
-        if (text.isNotEmpty() && !state.isGenerating) {
+        val attachType = pendingAttachmentType.orEmpty()
+        val attachUri = pendingAttachmentUri.orEmpty()
+        if ((text.isNotEmpty() || attachUri.isNotEmpty()) && !state.isGenerating) {
             inputText = ""
-            viewModel.sendMessage(text)
+            pendingAttachmentType = null
+            pendingAttachmentUri = null
+            pendingAttachmentName = null
+            viewModel.sendMessage(
+                rawInput = text,
+                attachmentType = attachType,
+                attachmentUri = attachUri
+            )
         }
     }
 
@@ -156,7 +218,7 @@ fun IslamicAiScreen(
                         Column {
                             Text("المساعد الإسلامي الذكي", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                             Text(
-                                "نموذج لغوي محلي • بدون إنترنت",
+                                "مقتصر على العلوم الدينية • محلي بدون إنترنت",
                                 fontSize = 11.sp,
                                 color = Color(0xFFD9EBDF)
                             )
@@ -204,119 +266,10 @@ fun IslamicAiScreen(
                     .imePadding()
             ) {
                 if (state.messages.isEmpty()) {
-                    LazyColumn(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        item {
-                            Card(
-                                shape = RoundedCornerShape(22.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(
-                                            Brush.linearGradient(
-                                                listOf(Color(0xEE154436), Color(0xE81C312B))
-                                            )
-                                        )
-                                        .padding(18.dp)
-                                ) {
-                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(44.dp)
-                                                    .clip(CircleShape)
-                                                    .background(Color(0x33FFD36A)),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Icon(
-                                                    Icons.Default.AutoAwesome,
-                                                    contentDescription = null,
-                                                    tint = Color(0xFFFFD36A)
-                                                )
-                                            }
-                                            Spacer(Modifier.width(10.dp))
-                                            Column(Modifier.weight(1f)) {
-                                                Text(
-                                                    "مساعدك الإسلامي الشخصي",
-                                                    color = Color.White,
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 16.sp
-                                                )
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Icon(
-                                                        Icons.Default.OfflinePin,
-                                                        contentDescription = null,
-                                                        tint = Color(0xFFFFD36A),
-                                                        modifier = Modifier.size(14.dp)
-                                                    )
-                                                    Spacer(Modifier.width(4.dp))
-                                                    Text(
-                                                        "مدرّب محليًا ويعمل دون إنترنت (${state.trainedEntriesCount} محورًا + القرآن والسنة)",
-                                                        color = Color(0xFFDCECE2),
-                                                        fontSize = 11.sp
-                                                    )
-                                                }
-                                            }
-                                        }
-                                        Text(
-                                            "يؤلف الرسائل الدينية والخواطر والخطب المنبرية والمحاضرات، ويجيب على الفتاوى والمسائل الفقهية بالأدلة القرآنية والنبوية، ويفسر الأحلام وفق قواعد ابن سيرين والنابلسي، ويحفظ محادثاتك تلقائيًا في القائمة الجانبية.",
-                                            color = Color(0xFFF3F8F5),
-                                            fontSize = 13.sp,
-                                            lineHeight = 20.sp
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        item {
-                            Text(
-                                "أمثلة سريعة للبدء:",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
-                        }
-
-                        item {
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                QUICK_PROMPTS.forEach { sample ->
-                                    Card(
-                                        modifier = Modifier
-                                            .clickable { viewModel.sendMessage(sample.prompt) },
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = CardDefaults.cardColors(
-                                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f)
-                                        )
-                                    ) {
-                                        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
-                                            Text(
-                                                sample.category,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                            Spacer(Modifier.height(2.dp))
-                                            Text(
-                                                sample.prompt,
-                                                fontSize = 12.sp,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    AiEmptyStateView(
+                        modifier = Modifier.weight(1f),
+                        onPromptClick = { prompt -> viewModel.sendMessage(prompt) }
+                    )
                 } else {
                     LazyColumn(
                         state = listState,
@@ -345,6 +298,30 @@ fun IslamicAiScreen(
                                 onShare = { content -> ShareUtil.share(context, content) },
                                 onShareWhatsapp = { content -> ShareUtil.shareWhatsapp(context, content) },
                                 onShareBluetooth = { content -> ShareUtil.shareBluetooth(context, content) },
+                                onSaveToPhone = { targetMsg ->
+                                    if (targetMsg.attachmentType == "card" || targetMsg.attachmentType == "image") {
+                                        val file = File(targetMsg.attachmentUri)
+                                        val res = MediaExportHelper.saveImageToGallery(context, file, targetMsg.categoryTag)
+                                        val toast = res.fold(
+                                            onSuccess = { "تم حفظ البطاقة بنجاح في $it" },
+                                            onFailure = { "تعذر حفظ الصورة: ${it.localizedMessage}" }
+                                        )
+                                        Toast.makeText(context, toast, Toast.LENGTH_LONG).show()
+                                    } else {
+                                        val res = MediaExportHelper.saveTextToDownloads(
+                                            context = context,
+                                            title = targetMsg.categoryTag.ifBlank { "رد المساعد الإسلامي" },
+                                            category = targetMsg.categoryTag,
+                                            content = targetMsg.content,
+                                            references = targetMsg.referencesSummary
+                                        )
+                                        val toast = res.fold(
+                                            onSuccess = { "تم حفظ الرد في $it بنجاح" },
+                                            onFailure = { "تعذر حفظ الملف: ${it.localizedMessage}" }
+                                        )
+                                        Toast.makeText(context, toast, Toast.LENGTH_LONG).show()
+                                    }
+                                },
                                 onFollowUpClick = { prompt -> viewModel.sendMessage(prompt) },
                                 onSupportDeveloperClick = onSupportDeveloperClick,
                                 onShareApp = { ShareUtil.share(context, ShareUtil.inviteMessage()) }
@@ -369,7 +346,7 @@ fun IslamicAiScreen(
                                                 modifier = Modifier.size(16.dp),
                                                 strokeWidth = 2.dp
                                             )
-                                            Text("جارٍ الصياغة والاستدلال محليًا...", fontSize = 12.sp)
+                                            Text("جارٍ الاستدلال والصياغة محليًا...", fontSize = 12.sp)
                                         }
                                     }
                                 }
@@ -378,46 +355,93 @@ fun IslamicAiScreen(
                     }
                 }
 
-                // Bottom chat input bar
+                // شريط إدخال الرسائل والمرفقات والمايك
                 Surface(
                     tonalElevation = 4.dp,
                     shadowElevation = 6.dp,
                     color = MaterialTheme.colorScheme.surface
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .navigationBarsPadding()
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.Bottom
                     ) {
-                        OutlinedTextField(
-                            value = inputText,
-                            onValueChange = { inputText = it },
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("ai_chat_input"),
-                            placeholder = { Text("اسأل في الفقه، تفسير حلم، خطبة، خاطرة، أو رسالة...") },
-                            maxLines = 4,
-                            shape = RoundedCornerShape(18.dp),
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                            keyboardActions = KeyboardActions(onSend = { submitCurrent() })
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        FilledIconButton(
-                            onClick = submitCurrent,
-                            enabled = inputText.isNotBlank() && !state.isGenerating,
-                            modifier = Modifier
-                                .size(50.dp)
-                                .testTag("ai_send_button"),
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.primary
+                        if (pendingAttachmentUri != null) {
+                            SelectedAttachmentChip(
+                                attachment = PendingAttachment(
+                                    type = pendingAttachmentType.orEmpty(),
+                                    uri = Uri.parse(pendingAttachmentUri),
+                                    displayName = pendingAttachmentName.orEmpty()
+                                ),
+                                onRemove = {
+                                    pendingAttachmentType = null
+                                    pendingAttachmentUri = null
+                                    pendingAttachmentName = null
+                                }
                             )
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 6.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.Bottom
                         ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.Send,
-                                contentDescription = "إرسال"
+                            AttachmentOptionsButton(
+                                onPickImage = {
+                                    pickPhotoLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                },
+                                onPickAudio = {
+                                    pickAudioLauncher.launch("audio/*")
+                                },
+                                onDesignCardPrompt = {
+                                    inputText = "صمم لي بطاقة دعوية إسلامية"
+                                }
                             )
+
+                            IconButton(
+                                onClick = onMicClick,
+                                modifier = Modifier
+                                    .minimumInteractiveComponentSize()
+                                    .testTag("ai_mic_button")
+                            ) {
+                                Icon(
+                                    Icons.Default.Mic,
+                                    contentDescription = "التسجيل الصوتي وسماع الطلب باللهجة العامية أو الفصحى",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+
+                            OutlinedTextField(
+                                value = inputText,
+                                onValueChange = { inputText = it },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("ai_chat_input"),
+                                placeholder = { Text("اكتب أو تحدث بالمايك...") },
+                                maxLines = 4,
+                                shape = RoundedCornerShape(18.dp),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                                keyboardActions = KeyboardActions(onSend = { submitCurrent() })
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            FilledIconButton(
+                                onClick = submitCurrent,
+                                enabled = (inputText.isNotBlank() || pendingAttachmentUri != null) && !state.isGenerating,
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .testTag("ai_send_button"),
+                                colors = IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                )
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.Send,
+                                    contentDescription = "إرسال"
+                                )
+                            }
                         }
                     }
                 }
