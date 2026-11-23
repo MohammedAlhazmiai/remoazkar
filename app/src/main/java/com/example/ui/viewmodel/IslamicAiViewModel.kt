@@ -131,6 +131,10 @@ class IslamicAiViewModel(application: Application) : AndroidViewModel(applicatio
     companion object {
         private val EXCLUDED_SUPPORT_TAGS = setOf(
             "ترحيب وتعريف",
+            "دردشة يومية ودية",
+            "دردشة واستدلال ذكي",
+            "مواساة ودعم إيماني",
+            "نصيحة إيمانية وعملية",
             "شكر وثناء",
             "متابعة السياق",
             "ملخص موجز",

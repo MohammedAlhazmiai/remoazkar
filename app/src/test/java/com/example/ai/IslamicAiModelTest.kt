@@ -148,11 +148,31 @@ class IslamicAiModelTest {
     }
 
     @Test
-    fun guardrailInterceptsSecularTaskAndApologizes() {
-        val rejected = IslamicAiModel.generateReply("اكتب كود بايثون لفرز مصفوفة ارقام", corpus)
-        assertEquals("اعتذار واقتصار شرعي", rejected.domainTag)
-        assertTrue(rejected.text.contains("أعتذر منك أخي الكريم، أنا مساعد إسلامي متخصص ومقتصر"))
-        assertTrue(rejected.text.contains("لا يمكنني الإجابة أو المساعدة في موضوعات خارج هذا النطاق"))
+    fun worldlyPromptReceivesIslamicContextInsteadOfOutOfScopeApology() {
+        val reply = IslamicAiModel.generateReply("اكتب كود بايثون لفرز مصفوفة ارقام", corpus)
+        assertEquals("دردشة يومية ودية", reply.domainTag)
+        assertTrue(reply.text.contains("منظور إسلامي"))
+        assertTrue(reply.text.contains("بايثون"))
+
+        val sports = IslamicAiModel.generateReply("من هو افضل لاعب ميسي ام رونالدو؟", corpus)
+        assertEquals("دردشة يومية ودية", sports.domainTag)
+        assertTrue(sports.text.contains("منظور إسلامي"))
+        assertTrue(sports.text.contains("ميسي"))
+    }
+
+    @Test
+    fun dailyFriendChatReachesWarmIslamicRepliesInsteadOfGuardrailOrRandomFatwa() {
+        val greeting = IslamicAiModel.generateReply("كيف حالك؟", corpus)
+        assertEquals("دردشة يومية ودية", greeting.domainTag)
+        assertTrue(greeting.text.contains("مساعد رقمي"))
+
+        val distress = IslamicAiModel.generateReply("أشعر بضيق وقلق", corpus)
+        assertEquals("مواساة ودعم إيماني", distress.domainTag)
+        assertTrue(distress.text.contains("اللهم إني أعوذ بك من الهم والحزن"))
+
+        val success = IslamicAiModel.generateReply("نجحت اليوم وأنا سعيد", corpus)
+        assertEquals("دردشة يومية ودية", success.domainTag)
+        assertTrue(success.text.contains("ما شاء الله"))
     }
 
     @Test

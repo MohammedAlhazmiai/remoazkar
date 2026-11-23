@@ -151,6 +151,25 @@ class AiChatRepositoryTest {
     }
 
     @Test
+    fun dailyChatAndIslamicGuidanceTagsDoNotCountAsCompletedTasks() {
+        val msgs = listOf(
+            AiMessageEntity(id = 1L, conversationId = 1L, role = AiChatRepository.ROLE_ASSISTANT, content = "أهلًا", categoryTag = "ترحيب وتعريف"),
+            AiMessageEntity(id = 2L, conversationId = 1L, role = AiChatRepository.ROLE_ASSISTANT, content = "كيف يومك؟", categoryTag = "دردشة يومية ودية"),
+            AiMessageEntity(id = 3L, conversationId = 1L, role = AiChatRepository.ROLE_ASSISTANT, content = "أنا معك", categoryTag = "مواساة ودعم إيماني"),
+            AiMessageEntity(id = 4L, conversationId = 1L, role = AiChatRepository.ROLE_ASSISTANT, content = "نصيحة", categoryTag = "نصيحة إيمانية وعملية"),
+            AiMessageEntity(id = 5L, conversationId = 1L, role = AiChatRepository.ROLE_ASSISTANT, content = "توجيه", categoryTag = "دردشة واستدلال ذكي"),
+            AiMessageEntity(id = 6L, conversationId = 1L, role = AiChatRepository.ROLE_ASSISTANT, content = "مهمة أولى", categoryTag = "فتوى ومسألة فقهية"),
+            AiMessageEntity(id = 7L, conversationId = 1L, role = AiChatRepository.ROLE_ASSISTANT, content = "مهمة ثانية", categoryTag = "خطبة منبرية")
+        )
+
+        for (index in 0..4) {
+            assertFalse(IslamicAiViewModel.shouldShowSupportPrompt(msgs, index, emptySet()))
+        }
+        assertFalse(IslamicAiViewModel.shouldShowSupportPrompt(msgs, 5, emptySet()))
+        assertTrue(IslamicAiViewModel.shouldShowSupportPrompt(msgs, 6, emptySet()))
+    }
+
+    @Test
     fun saveExchangeWithAttachmentsPersistsAttachmentFields() = runBlocking {
         val dao = FakeAiChatDao()
         val repo = AiChatRepository(dao)

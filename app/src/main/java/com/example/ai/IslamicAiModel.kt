@@ -17,11 +17,8 @@ data class IslamicAiResponse(
 )
 
 /**
- * Local Offline Islamic Language Model Engine.
- *
- * Trained on curated Fiqh fatwas, Ibn Sirin & Al-Nabulsi dream interpretation rules,
- * Islamic letters, faith reflections (khawatir), Jumu'ah khutbahs, da'wah lectures,
- * and cross-indexed with the full bundled Holy Quran (6,236 Ayat), AdiyaData, and Hisn Al-Muslim.
+ * مساعد محلي يعتمد على مطابقة النوايا وقوالب ومحتوى إسلامي معدّ مسبقًا.
+ * هذا ليس نموذجًا لغويًا جرى تدريبه أو ضبطه؛ الإجابات التوليدية المفتوحة تأتي من Gemini عند توفر الإنترنت.
  */
 object IslamicAiModel {
 
@@ -41,20 +38,19 @@ object IslamicAiModel {
     ): IslamicAiResponse {
         val cleanQuery = query.trim()
 
-        // 1. فحص درع الانضباط الشرعي: المساعد مقتصر على المهام الإسلامية الدينية ويعتذر عن غيرها
+        // 1. فحص الطلبات الضارة فقط؛ الأسئلة اليومية والدنيوية تمر لتوجيهها بمنظور إسلامي مناسب.
         val isAllowed = userAttachmentType.isNotBlank() ||
             IslamicGuardrail.isAllowedQuery(cleanQuery, hasPriorContext = recentMessages.isNotEmpty())
         if (cleanQuery.isNotBlank() && !isAllowed) {
             return IslamicAiResponse(
                 text = IslamicGuardrail.APOLOGY_RESPONSE,
-                domainTag = "اعتذار واقتصار شرعي",
-                detectedTopic = "اعتذار واقتصار على العلوم الدينية",
+                domainTag = "توجيه آمن",
+                detectedTopic = "رفض تعليمات ضارة",
                 references = emptyList(),
                 followUps = listOf(
-                    "ما حكم سجود السهو في الصلاة؟",
-                    "اكتب لي خطبة جمعة عن بر الوالدين",
-                    "فسر لي حلم المطر في المنام",
-                    "صمم لي بطاقة جمعة مباركة"
+                    "كيف أحمي حسابي؟",
+                    "ما البديل الآمن لهذا الطلب؟",
+                    "ما التوجيه الأخلاقي في هذا الموضوع؟"
                 )
             )
         }
@@ -98,11 +94,11 @@ object IslamicAiModel {
                     text = generativeText,
                     domainTag = domainTag,
                     detectedTopic = "توليد ذكي متقدم عبر Gemini",
-                    references = listOf("القرآن الكريم", "السنة النبوية الشريفة"),
+                    references = emptyList(),
                     followUps = listOf(
-                        "أعطني دليلاً من القرآن الكريم",
-                        "وضح لي الأحكام المتعلقة بهذه المسألة",
-                        "اكتب لي دعاءً في هذا الأمر"
+                        "أعطني نصيحة عملية أخرى",
+                        "كيف أتعامل مع الأمر بهدوء؟",
+                        "ما القيمة الإسلامية المرتبطة بهذا الموضوع؟"
                     ),
                     attachmentType = if (userAttachmentType == "image") "card" else "",
                     attachmentUri = if (userAttachmentType == "image" && generativeText.length > 50 && context != null) {
@@ -117,6 +113,17 @@ object IslamicAiModel {
                     } else ""
                 )
             }
+        }
+
+        // عند انقطاع الشبكة لا نعرض فتوى عشوائية لسؤال يومي أو دنيوي؛ نوضح حدود المعرفة ونجيب بإطار إسلامي عام.
+        IslamicDailyChatEngine.offlineFallback(cleanQuery)?.let { dailyReply ->
+            return IslamicAiResponse(
+                text = dailyReply.text,
+                domainTag = dailyReply.domainTag,
+                detectedTopic = dailyReply.detectedTopic,
+                references = emptyList(),
+                followUps = dailyReply.followUps
+            )
         }
 
         // 4. معالجة الصور والتسجيلات المرفوعة محلياً (Fallback)
@@ -153,14 +160,12 @@ object IslamicAiModel {
     }
 
     private fun greetingResponse(): IslamicAiResponse = IslamicAiResponse(
-        text = "وعليكم السلام ورحمة الله وبركاته، أهلاً ومرحباً بك أخي الكريم في **المساعد الإسلامي الذكي المحلي** (يعمل بكفاءة عالية بدون إنترنت).\n\n" +
-            "يسعدني ويشرفني خدمتك بأسلوب عربي فصيح ومتزن في المجالات التالية:\n" +
+        text = "وعليكم السلام ورحمة الله وبركاته، أهلًا بك يا صديقي. أنا مساعد رقمي، ولست إنسانًا؛ يسعدني أن أتحدث معك بودّ وأقدم توجيهًا إسلاميًا نافعًا في الحديث اليومي وشؤون الحياة والأسئلة الشرعية.\n\n" +
+            "تتوفر بعض الردود والمعلومات محليًا دون إنترنت، أما الإجابات المفتوحة الأكثر تفصيلًا فتستفيد من Gemini عند توفر الاتصال. المحرك المحلي يستخدم محتوى وقواعد معدّة مسبقًا، وليس نموذجًا جرى تدريبه على المحادثات.\n\n" +
+            "يمكنك التحدث معي عن يومك أو سؤالي عن:\n" +
             "• **الفتاوى والمسائل الفقهية:** الطهارة، الصلاة، الصيام ومفطراته، الزكاة، المعاملات، الأيمان، الأسرة، مع الأدلة من القرآن والسنة.\n" +
-            "• **تفسير الأحلام وتعبير الرؤى:** وفق قواعد ابن سيرين والنابلسي والضوابط الشرعية.\n" +
-            "• **الرسائل الدينية والخواطر:** تهنئة، تعزية، مواساة، اعتذار، بر والدين، وتأملات إيمانية.\n" +
-            "• **الخطب والمحاضرات:** خطب جمعة كاملة الأركان ودروس دعوية بالمحاور والشواهد.\n" +
-            "• **الاستدلال والبحث الديني:** استخراج الآيات القرآنية والأحاديث النبوية في أي موضوع.\n\n" +
-            "تفضل بكتابة سؤالك أو طلبك، وستُحفظ محادثتك محليًا للعودة إليها في أي وقت.",
+            "• **تفسير الأحلام والرسائل والخواطر والخطب**، مع مراعاة حدود المعرفة وعدم الجزم بالغيب.\n\n" +
+            "اكتب سؤالك أو أخبرني ما الذي يشغل بالك.",
         domainTag = IslamicIntent.GREETING.arabicLabel,
         detectedTopic = "الترحيب والتعريف",
         references = emptyList(),
