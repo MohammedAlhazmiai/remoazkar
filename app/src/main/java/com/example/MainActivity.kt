@@ -39,6 +39,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.ai.AppCheckInitializer
 import com.example.data.AthkarReminderScheduler
 import com.example.data.AppBackgroundStore
 import com.example.data.AppUpdateChecker
@@ -116,6 +117,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // التهيئة الإلزامية لـ Firebase App Check قبل أي عملية سحابية أو محرك ذكاء اصطناعي
+        AppCheckInitializer.configureAppCheck(this, intent)
 
         preferencesManager = PreferencesManager(applicationContext)
 

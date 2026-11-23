@@ -59,7 +59,55 @@ object IslamicAiModel {
             )
         }
 
-        // 2. معالجة الصور والتسجيلات المرفوعة
+        // 2. محاولة الاستعلام من نموذج الذكاء الاصطناعي التوليدي السحابي (Firebase AI Logic / Gemini 3.5 Flash Lite)
+        if (context != null && (cleanQuery.isNotBlank() || userAttachmentType.isNotBlank())) {
+            val generativeText = runCatching {
+                kotlinx.coroutines.runBlocking {
+                    FirebaseAiEngine.generateGenerativeReply(
+                        context = context,
+                        query = cleanQuery,
+                        attachmentType = userAttachmentType,
+                        attachmentUri = userAttachmentUri,
+                        recentMessages = recentMessages
+                    )
+                }
+            }.getOrNull()
+
+            if (!generativeText.isNullOrBlank()) {
+                val domainTag = when {
+                    userAttachmentType == "image" -> "تحليل بصري ذكي"
+                    userAttachmentType == "audio" -> "تحليل صوتي ذكي"
+                    cleanQuery.contains("حلم") || cleanQuery.contains("رؤيا") -> "تفسير الرؤى والأحلام"
+                    cleanQuery.contains("حكم") || cleanQuery.contains("يجوز") -> "فتوى ومسألة فقهية"
+                    cleanQuery.contains("خطبة") || cleanQuery.contains("محاضرة") -> "خطبة ومحاضرة إيمانية"
+                    else -> "دردشة واستدلال ذكي"
+                }
+                return IslamicAiResponse(
+                    text = generativeText,
+                    domainTag = domainTag,
+                    detectedTopic = "توليد ذكي متقدم عبر Gemini",
+                    references = listOf("القرآن الكريم", "السنة النبوية الشريفة"),
+                    followUps = listOf(
+                        "أعطني دليلاً من القرآن الكريم",
+                        "وضح لي الأحكام المتعلقة بهذه المسألة",
+                        "اكتب لي دعاءً في هذا الأمر"
+                    ),
+                    attachmentType = if (userAttachmentType == "image") "card" else "",
+                    attachmentUri = if (userAttachmentType == "image" && generativeText.length > 50 && context != null) {
+                        IslamicCardGenerator.generateCard(
+                            context = context,
+                            request = IslamicCardRequest(
+                                categoryTitle = domainTag,
+                                mainText = generativeText.take(180),
+                                referenceText = "توليد ذكي عبر Gemini"
+                            )
+                        ).absolutePath
+                    } else ""
+                )
+            }
+        }
+
+        // 3. معالجة الصور والتسجيلات المرفوعة محلياً (Fallback)
         if (userAttachmentType == "image" && (cleanQuery.isBlank() || IslamicAiMultimodalHandler.isGenericMediaInquiry(cleanQuery))) {
             return IslamicAiMultimodalHandler.composeImageAnalysisReply(cleanQuery, userAttachmentUri, context, entries)
         }
