@@ -67,10 +67,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -107,7 +105,6 @@ fun IslamicAiScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val clipboard = LocalClipboardManager.current
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -340,11 +337,14 @@ fun IslamicAiScreen(
                                 showSupportPrompt = showSupport,
                                 onDismissSupportPrompt = { viewModel.dismissSupportPrompt(msg.id) },
                                 onCopy = { content ->
-                                    clipboard.setText(AnnotatedString(content))
-                                    Toast.makeText(context, "تم نسخ النص", Toast.LENGTH_SHORT).show()
+                                    val copied = ShareUtil.copyToClipboard(context, content)
+                                    val notice = if (copied) "تم نسخ رد المساعد" else "تعذر نسخ النص"
+                                    Toast.makeText(context, notice, Toast.LENGTH_SHORT).show()
                                 },
                                 onSpeak = { content -> TtsManager.toggle(content) },
                                 onShare = { content -> ShareUtil.share(context, content) },
+                                onShareWhatsapp = { content -> ShareUtil.shareWhatsapp(context, content) },
+                                onShareBluetooth = { content -> ShareUtil.shareBluetooth(context, content) },
                                 onFollowUpClick = { prompt -> viewModel.sendMessage(prompt) },
                                 onSupportDeveloperClick = onSupportDeveloperClick,
                                 onShareApp = { ShareUtil.share(context, ShareUtil.inviteMessage()) }

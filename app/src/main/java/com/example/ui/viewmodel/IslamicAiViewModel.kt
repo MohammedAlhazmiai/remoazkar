@@ -1,6 +1,7 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ai.CorpusEntry
@@ -48,6 +49,8 @@ class IslamicAiViewModel(application: Application) : AndroidViewModel(applicatio
     private val dismissedSupportIdsFlow = MutableStateFlow<Set<Long>>(emptySet())
 
     private var loadedEntries: List<CorpusEntry> = emptyList()
+    @Volatile
+    private var userChangedConversation = false
 
     private val messagesFlow = activeConversationIdFlow.flatMapLatest { convId ->
         if (convId == null) flowOf(emptyList()) else repository.observeMessages(convId)
@@ -80,27 +83,35 @@ class IslamicAiViewModel(application: Application) : AndroidViewModel(applicatio
 
     init {
         viewModelScope.launch {
-            val entries = withContext(Dispatchers.IO) {
-                IslamicAiModel.prepareAssets(getApplication())
-                IslamicCorpusLoader.ensureLoaded(getApplication())
-            }
-            loadedEntries = entries
-            entriesCountFlow.value = entries.size
-            modelReadyFlow.value = true
+            runCatching {
+                val entries = withContext(Dispatchers.IO) {
+                    IslamicAiModel.prepareAssets(getApplication())
+                    IslamicCorpusLoader.ensureLoaded(getApplication())
+                }
+                loadedEntries = entries
+                entriesCountFlow.value = entries.size
+                modelReadyFlow.value = true
 
-            // استعادة أحدث محادثة محفوظة تلقائيًا لمواصلة الحوار إن وُجدت
-            val latest = withContext(Dispatchers.IO) { repository.getLatestConversation() }
-            if (activeConversationIdFlow.value == null && latest != null) {
-                activeConversationIdFlow.value = latest.id
+                // استعادة أحدث محادثة محفوظة تلقائيًا ما لم يختر المستخدم محادثة جديدة أثناء التهيئة
+                if (!userChangedConversation && activeConversationIdFlow.value == null) {
+                    val latest = withContext(Dispatchers.IO) { repository.getLatestConversation() }
+                    if (!userChangedConversation && activeConversationIdFlow.value == null && latest != null) {
+                        activeConversationIdFlow.value = latest.id
+                    }
+                }
+            }.onFailure { error ->
+                Log.e("IslamicAiViewModel", "Failed initializing offline AI model", error)
             }
         }
     }
 
     fun startNewConversation() {
+        userChangedConversation = true
         activeConversationIdFlow.value = null
     }
 
     fun selectConversation(conversationId: Long) {
+        userChangedConversation = true
         activeConversationIdFlow.value = conversationId
     }
 
@@ -151,6 +162,7 @@ class IslamicAiViewModel(application: Application) : AndroidViewModel(applicatio
     fun sendMessage(rawInput: String) {
         val clean = rawInput.trim()
         if (clean.isEmpty() || isGeneratingFlow.value) return
+        userChangedConversation = true
 
         viewModelScope.launch {
             isGeneratingFlow.value = true
@@ -189,8 +201,9 @@ class IslamicAiViewModel(application: Application) : AndroidViewModel(applicatio
                     targetConvId to reply
                 }
                 activeConversationIdFlow.value = convId
-                // response handled via Room Flow
                 response.domainTag
+            } catch (error: Exception) {
+                Log.e("IslamicAiViewModel", "Error generating or saving offline AI response", error)
             } finally {
                 isGeneratingFlow.value = false
             }

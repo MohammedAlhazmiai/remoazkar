@@ -30,10 +30,8 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.OfflinePin
 import androidx.compose.material.icons.filled.Share
@@ -43,37 +41,34 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.LinkAnnotation
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextLinkStyles
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.ai.AiChatRepository
 import com.example.data.ai.AiConversationEntity
 import com.example.data.ai.AiMessageEntity
+import com.example.util.ShareUtil
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -268,6 +263,8 @@ fun AiMessageBubble(
     onCopy: (String) -> Unit,
     onSpeak: (String) -> Unit,
     onShare: (String) -> Unit,
+    onShareWhatsapp: (String) -> Unit = {},
+    onShareBluetooth: (String) -> Unit = {},
     onFollowUpClick: (String) -> Unit,
     onSupportDeveloperClick: () -> Unit = {},
     onShareApp: () -> Unit = {}
@@ -276,13 +273,21 @@ fun AiMessageBubble(
     val followUps = remember(message.followUpsSerialized) {
         AiChatRepository.parseFollowUps(message.followUpsSerialized)
     }
+    val plainContent = remember(message.content) {
+        ShareUtil.formatReadableText(message.content)
+    }
+    val styledContent = remember(message.content) {
+        formatIslamicRichText(message.content)
+    }
+    var topShareMenuExpanded by remember(message.id) { mutableStateOf(false) }
+    var bottomShareMenuExpanded by remember(message.id) { mutableStateOf(false) }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.Start else Arrangement.End
     ) {
         Card(
-            modifier = Modifier.widthIn(max = 350.dp),
+            modifier = Modifier.widthIn(max = 355.dp),
             shape = RoundedCornerShape(
                 topStart = 18.dp,
                 topEnd = 18.dp,
@@ -299,36 +304,72 @@ fun AiMessageBubble(
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
-                if (!isUser && message.categoryTag.isNotBlank()) {
+                if (!isUser) {
                     Row(
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = RoundedCornerShape(8.dp)
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
-                            Text(
-                                text = message.categoryTag,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            if (message.categoryTag.isNotBlank()) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text(
+                                        text = message.categoryTag,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                            }
+                            Icon(
+                                Icons.Default.OfflinePin,
+                                contentDescription = "إجابة محلية بدون إنترنت",
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.primary
                             )
                         }
-                        Icon(
-                            Icons.Default.OfflinePin,
-                            contentDescription = "إجابة محلية بدون إنترنت",
-                            modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.primary
+
+                        // زر النسخ والمشاركة السريعة بجانب رأس الرد مباشرة
+                        ReplyActionChip(
+                            icon = Icons.Default.ContentCopy,
+                            label = "نسخ",
+                            contentDescription = "نسخ رد المساعد",
+                            testTag = "ai_copy_reply_button",
+                            onClick = { onCopy(plainContent) }
                         )
+                        Box {
+                            ReplyActionChip(
+                                icon = Icons.Default.Share,
+                                label = "مشاركة",
+                                contentDescription = "مشاركة رد المساعد عبر واتساب أو البرامج أو البلوتوث",
+                                testTag = "ai_share_reply_button",
+                                onClick = { topShareMenuExpanded = true }
+                            )
+                            AiReplyShareDropdownMenu(
+                                expanded = topShareMenuExpanded,
+                                onDismiss = { topShareMenuExpanded = false },
+                                onShareWhatsapp = { onShareWhatsapp(plainContent) },
+                                onShareAllApps = { onShare(plainContent) },
+                                onShareBluetooth = { onShareBluetooth(plainContent) }
+                            )
+                        }
                     }
                     Spacer(Modifier.height(8.dp))
                 }
 
                 SelectionContainer {
                     Text(
-                        text = message.content,
+                        text = styledContent,
                         color = if (isUser) Color.White else MaterialTheme.colorScheme.onSurface,
                         fontSize = 14.sp,
                         lineHeight = 23.sp
@@ -348,47 +389,46 @@ fun AiMessageBubble(
                 }
 
                 if (!isUser) {
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(8.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
+                        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(
-                            onClick = { onCopy(message.content) },
-                            modifier = Modifier.minimumInteractiveComponentSize()
-                        ) {
-                            Icon(
-                                Icons.Default.ContentCopy,
-                                contentDescription = "نسخ الرد",
-                                modifier = Modifier.size(18.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        ReplyActionChip(
+                            icon = Icons.Default.VolumeUp,
+                            label = "استماع",
+                            contentDescription = "الاستماع إلى رد المساعد",
+                            testTag = "ai_speak_reply_bottom",
+                            onClick = { onSpeak(plainContent) }
+                        )
+                        ReplyActionChip(
+                            icon = Icons.Default.ContentCopy,
+                            label = "نسخ",
+                            contentDescription = "نسخ الرد",
+                            testTag = "ai_copy_reply_bottom",
+                            onClick = { onCopy(plainContent) }
+                        )
+                        Box {
+                            ReplyActionChip(
+                                icon = Icons.Default.Share,
+                                label = "مشاركة",
+                                contentDescription = "خيارات مشاركة الرد",
+                                testTag = "ai_share_reply_bottom",
+                                onClick = { bottomShareMenuExpanded = true }
                             )
-                        }
-                        IconButton(
-                            onClick = { onSpeak(message.content) },
-                            modifier = Modifier.minimumInteractiveComponentSize()
-                        ) {
-                            Icon(
-                                Icons.Default.VolumeUp,
-                                contentDescription = "استماع للرد",
-                                modifier = Modifier.size(18.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        IconButton(
-                            onClick = { onShare(message.content) },
-                            modifier = Modifier.minimumInteractiveComponentSize()
-                        ) {
-                            Icon(
-                                Icons.Default.Share,
-                                contentDescription = "مشاركة الرد",
-                                modifier = Modifier.size(18.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            AiReplyShareDropdownMenu(
+                                expanded = bottomShareMenuExpanded,
+                                onDismiss = { bottomShareMenuExpanded = false },
+                                onShareWhatsapp = { onShareWhatsapp(plainContent) },
+                                onShareAllApps = { onShare(plainContent) },
+                                onShareBluetooth = { onShareBluetooth(plainContent) }
                             )
                         }
                     }
 
                     if (followUps.isNotEmpty()) {
+                        Spacer(Modifier.height(6.dp))
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -423,135 +463,38 @@ fun AiMessageBubble(
 }
 
 @Composable
-private fun DeveloperSupportPromptFooter(
-    onSupportDeveloperClick: () -> Unit,
-    onShareApp: () -> Unit,
-    onDismiss: () -> Unit
+private fun ReplyActionChip(
+    icon: ImageVector,
+    label: String,
+    contentDescription: String,
+    testTag: String,
+    onClick: () -> Unit
 ) {
-    val primaryColor = MaterialTheme.colorScheme.primary
-    val annotatedSupportNotice = remember(primaryColor) {
-        buildAnnotatedString {
-            append(
-                "إذا أعجبك تطبيقنا وخدماتنا يمكنك دعم المطور حسب ما تستطيع ليستطيع مواصلة تطوير التطبيق، " +
-                    "وذلك من خلال الدعم الموجود أسفل الإعدادات أو "
-            )
-            withLink(
-                LinkAnnotation.Clickable(
-                    tag = "support_developer_link",
-                    styles = TextLinkStyles(
-                        style = SpanStyle(
-                            color = primaryColor,
-                            fontWeight = FontWeight.Bold,
-                            textDecoration = TextDecoration.Underline
-                        )
-                    ),
-                    linkInteractionListener = { onSupportDeveloperClick() }
-                )
-            ) {
-                append("الضغط هنا")
-            }
-            append(
-                "، وهو أمرٌ ليس إلزاميًا، وأرجو منك مشاركة التطبيق مع كل من تحب، " +
-                    "ولا تنسَ الدعاء للمطور محمد الحزمي جزاك الله خيرًا."
-            )
-        }
-    }
-
     Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.48f)
+        onClick = onClick,
+        modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .testTag(testTag),
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "دعم وتطوير التطبيق (اختياري)",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Surface(
-                    onClick = onDismiss,
-                    modifier = Modifier
-                        .minimumInteractiveComponentSize()
-                        .testTag("hide_support_prompt_button"),
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = "إخفاء الرسالة ومواصلة المحادثة",
-                            modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "إخفاء",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-            Text(
-                text = annotatedSupportNotice,
-                fontSize = 11.5.sp,
-                lineHeight = 18.sp,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                modifier = Modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.primary
             )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                FilledTonalButton(
-                    onClick = onSupportDeveloperClick,
-                    modifier = Modifier
-                        .weight(1f)
-                        .minimumInteractiveComponentSize()
-                        .testTag("ai_support_developer_button"),
-                    shape = RoundedCornerShape(12.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Favorite,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = Color(0xFFD84359)
-                    )
-                    Spacer(Modifier.width(5.dp))
-                    Text("ادعم المطور", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
-                OutlinedButton(
-                    onClick = onShareApp,
-                    modifier = Modifier
-                        .weight(1f)
-                        .minimumInteractiveComponentSize()
-                        .testTag("ai_share_app_button"),
-                    shape = RoundedCornerShape(12.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Share,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(Modifier.width(5.dp))
-                    Text("مشاركة التطبيق", fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                }
-            }
+            Text(
+                text = label,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
         }
     }
 }
