@@ -1,15 +1,11 @@
 package com.example.ui.screens
 
-import android.Manifest
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -199,33 +195,55 @@ private fun HumanRecordingsContent() {
     var customInterval by rememberSaveable { mutableStateOf("") }
     var customUnitIsHours by rememberSaveable { mutableStateOf(false) }
     var canScheduleExact by remember { mutableStateOf(HumanAzkarScheduler.canScheduleExactAlarms(context)) }
+    var pendingExactPermissionEnable by rememberSaveable { mutableStateOf(false) }
 
-    DisposableEffect(lifecycleOwner, context) {
+    val applyEnabled: (Boolean) -> Unit = { shouldEnable ->
+        val applied = HumanAzkarScheduler.setEnabled(context, shouldEnable)
+        enabled = if (shouldEnable) applied else false
+        if (shouldEnable && !applied) {
+            Toast.makeText(context, "تعذّر تفعيل الجدولة. تحقق من صلاحية المنبهات الدقيقة.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    val openExactAlarmSettings: (Boolean) -> Unit = { enableAfterGrant ->
+        pendingExactPermissionEnable = enableAfterGrant
+        val opened = runCatching {
+            context.startActivity(
+                Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                    data = Uri.fromParts("package", context.packageName, null)
+                }
+            )
+        }.isSuccess
+        if (!opened) {
+            pendingExactPermissionEnable = false
+            Toast.makeText(context, "تعذّر فتح إعدادات المنبهات الدقيقة.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    DisposableEffect(lifecycleOwner, context, canScheduleExact, enabled, pendingExactPermissionEnable) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 val exactPermissionNow = HumanAzkarScheduler.canScheduleExactAlarms(context)
-                if (exactPermissionNow != canScheduleExact) {
-                    canScheduleExact = exactPermissionNow
+                val permissionChanged = exactPermissionNow != canScheduleExact
+                canScheduleExact = exactPermissionNow
+
+                if (pendingExactPermissionEnable) {
+                    pendingExactPermissionEnable = false
+                    if (exactPermissionNow) {
+                        applyEnabled(true)
+                    } else {
+                        Toast.makeText(context, "لم تُمنح صلاحية المنبهات الدقيقة؛ لم يتم تفعيل الجدولة.", Toast.LENGTH_LONG).show()
+                    }
+                } else if (permissionChanged && enabled) {
+                    val scheduled = HumanAzkarScheduler.rescheduleIfEnabled(context)
+                    if (!scheduled && exactPermissionNow) {
+                        Toast.makeText(context, "تعذّرت إعادة جدولة التسجيلات. أعد تفعيلها من الشاشة.", Toast.LENGTH_LONG).show()
+                    }
                 }
-                HumanAzkarScheduler.rescheduleIfEnabled(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-
-    val applyEnabled: (Boolean) -> Unit = { shouldEnable ->
-        HumanAzkarScheduler.setEnabled(context, shouldEnable)
-        enabled = shouldEnable
-    }
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
-            applyEnabled(true)
-        } else {
-            Toast.makeText(context, "يلزم السماح بالإشعارات لإظهار تنبيه تشغيل الذكر.", Toast.LENGTH_LONG).show()
-        }
     }
 
     LazyColumn(
@@ -254,8 +272,11 @@ private fun HumanRecordingsContent() {
                         Column(Modifier.weight(1f)) {
                             Text("تشغيل دوري للتسجيلات", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                             Text(
-                                if (enabled) "يُشغّل مقطعًا بشريًا واحدًا كل ${intervalLabel(intervalMinutes)}، ثم يتوقف حتى الموعد التالي."
-                                else "التشغيل الدوري متوقف إلى أن تفعّله.",
+                                when {
+                                    enabled && canScheduleExact -> "يُشغّل مقطعًا بشريًا واحدًا كل ${intervalLabel(intervalMinutes)}، ثم يتوقف حتى الموعد التالي."
+                                    enabled -> "الإعداد محفوظ، لكن التشغيل متوقف مؤقتًا حتى استعادة صلاحية المنبهات الدقيقة."
+                                    else -> "التشغيل الدوري متوقف إلى أن تفعّله."
+                                },
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -265,12 +286,8 @@ private fun HumanRecordingsContent() {
                             onCheckedChange = { checked ->
                                 if (!checked) {
                                     applyEnabled(false)
-                                } else if (
-                                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
-                                    PackageManager.PERMISSION_GRANTED
-                                ) {
-                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !canScheduleExact) {
+                                    openExactAlarmSettings(true)
                                 } else {
                                     applyEnabled(true)
                                 }
@@ -356,31 +373,21 @@ private fun HumanRecordingsContent() {
 
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                         Text(
-                            if (canScheduleExact) "إذن المنبه الدقيق متاح؛ سيحاول التطبيق تشغيل الصوت في موعده، وقد يؤخره وضع توفير الطاقة."
-                            else "إذن المنبه الدقيق غير متاح؛ سيستخدم التطبيق إشعارًا بصوت التسجيل التالي. يعتمد سماع الصوت على السماح بالإشعارات وعدم كتم قناة «التسجيلات البشرية»، وقد يؤخر Android موعده.",
+                            if (canScheduleExact) "صلاحية المنبهات الدقيقة متاحة؛ يستخدمها التطبيق لبدء خدمة تشغيل التسجيل عند الموعد. قد يؤخر Android بعض المواعيد في وضع توفير الطاقة."
+                            else "صلاحية المنبهات الدقيقة غير متاحة؛ لن يبدأ التشغيل الدوري للتسجيلات في الخلفية. امنح هذه الصلاحية أولًا؛ لا يُستبدل تشغيل المقطع بإشعار يُعرض وكأنه تشغيل ناجح.",
                             fontSize = 12.sp,
                             lineHeight = 18.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         if (!canScheduleExact) {
                             OutlinedButton(
-                                onClick = {
-                                    runCatching {
-                                        context.startActivity(
-                                            Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-                                                data = Uri.fromParts("package", context.packageName, null)
-                                            }
-                                        )
-                                    }.onFailure {
-                                        Toast.makeText(context, "تعذّر فتح إعدادات المنبهات.", Toast.LENGTH_LONG).show()
-                                    }
-                                },
+                                onClick = { openExactAlarmSettings(false) },
                                 modifier = Modifier.fillMaxWidth()
                             ) { Text("فتح إعدادات المنبهات الدقيقة") }
                         }
                     }
                     Text(
-                        "في وضع Doze يقيّد Android المنبهات المسموح بها أثناء الخمول إلى مرة واحدة تقريبًا لكل تطبيق كل 9 دقائق، حتى مع إذن المنبه الدقيق، وقد يتأخر الموعد أكثر. لذلك لا يمكن ضمان فواصل 1–5 دقائق أثناء السكون، واختيار 10 دقائق أو أكثر أكثر واقعية. للمسار الاحتياطي يجب السماح بالإشعارات وتشغيل صوتها وعدم كتم قناة «التسجيلات البشرية».",
+                        "قد يسلّم Android منبهات «السماح أثناء الخمول» مرة واحدة تقريبًا في الدقيقة في الظروف العادية، لكنه قد يباعد بينها إلى نحو 15 دقيقة أو أكثر في وضع Doze. لذلك لا يمكن ضمان فواصل 1–5 دقائق أثناء السكون. السماح بإشعارات التطبيق يُظهر إشعار الخدمة المستمر، لكنه ليس شرطًا لبدء تشغيل التسجيل. إزالة التطبيق من التطبيقات الحديثة لا توقف المنبه عادةً؛ أما «فرض الإيقاف» أو قيود البطارية/التشغيل التلقائي لدى بعض الشركات فقد توقفه حتى إعادة السماح به.",
                         fontSize = 11.sp,
                         lineHeight = 17.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant

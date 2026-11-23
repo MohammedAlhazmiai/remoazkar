@@ -14,9 +14,11 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.MainActivity
 import com.example.data.HumanAzkarAudioCatalog
+import com.example.data.NotificationHelper
 import java.util.Locale
 
 /**
@@ -140,16 +142,29 @@ class AudioAzkarPlaybackService : Service() {
         acquireWakeLock()
         renewWakeLock()
         persistState(mode = MODE_HUMAN, title = track.title, text = "", index = humanIndex)
-        startForegroundCompat(
-            buildNotification(
-                track.title,
-                humanNotificationSnippet(track.index)
+        try {
+            startForegroundCompat(
+                buildNotification(
+                    track.title,
+                    humanNotificationSnippet(track.index)
+                )
             )
-        )
+        } catch (error: Exception) {
+            reportHumanPlaybackFailure(
+                track.resourceName,
+                "Could not promote audio service to foreground for ${track.resourceName}",
+                error
+            )
+            return
+        }
 
         val resourceId = resources.getIdentifier(track.resourceName, "raw", packageName)
         if (resourceId == 0) {
-            finishHumanTrack()
+            reportHumanPlaybackFailure(
+                track.resourceName,
+                "Missing packaged audio resource ${track.resourceName}",
+                null
+            )
             return
         }
 
@@ -165,7 +180,13 @@ class AudioAzkarPlaybackService : Service() {
             )
             player.setOnPreparedListener { prepared ->
                 if (mediaPlayer === prepared) {
-                    runCatching { prepared.start() }
+                    runCatching { prepared.start() }.onFailure { error ->
+                        reportHumanPlaybackFailure(
+                            track.resourceName,
+                            "MediaPlayer.start failed for ${track.resourceName}",
+                            error
+                        )
+                    }
                 }
             }
             // عند انتهاء المقطع يتوقف التشغيل؛ المقطع التالي يأتي من المجدول الزمني حسب الفاصل المختار.
@@ -175,9 +196,12 @@ class AudioAzkarPlaybackService : Service() {
                     finishHumanTrack()
                 }
             }
-            player.setOnErrorListener { _, _, _ ->
-                releaseMediaPlayer()
-                finishHumanTrack()
+            player.setOnErrorListener { _, what, extra ->
+                reportHumanPlaybackFailure(
+                    track.resourceName,
+                    "MediaPlayer error for ${track.resourceName}: what=$what extra=$extra",
+                    null
+                )
                 true
             }
             resources.openRawResourceFd(resourceId).use { descriptor ->
@@ -188,10 +212,27 @@ class AudioAzkarPlaybackService : Service() {
                 )
             }
             player.prepareAsync()
-        } catch (_: Exception) {
-            releaseMediaPlayer()
-            finishHumanTrack()
+        } catch (error: Exception) {
+            reportHumanPlaybackFailure(
+                track.resourceName,
+                "Could not prepare human-azkar audio ${track.resourceName}",
+                error
+            )
         }
+    }
+
+    private fun reportHumanPlaybackFailure(resourceName: String, message: String, error: Throwable?) {
+        if (error == null) Log.e(TAG, message) else Log.e(TAG, message, error)
+        runCatching {
+            NotificationHelper.showHumanAzkarFallback(
+                context = applicationContext,
+                id = NOTIFICATION_ID + 1,
+                title = "تعذّر تشغيل التسجيل",
+                body = "فشل تشغيل ملف الذكر كمقطع صوتي؛ تحقق من تحديث التطبيق وإعدادات التشغيل في الخلفية.",
+                resourceName = resourceName
+            )
+        }
+        finishHumanTrack()
     }
 
     /**
@@ -461,6 +502,7 @@ class AudioAzkarPlaybackService : Service() {
         const val EXTRA_AUDIO_RESOURCE_NAME = "com.example.extra.HUMAN_AZKAR_AUDIO_RESOURCE"
         const val CHANNEL_ID = "rim_athkar_playback"
         const val NOTIFICATION_ID = 7041
+        private const val TAG = "AudioAzkarPlaybackService"
 
         private const val DEFAULT_TITLE = "الأذكار الصوتية"
         private const val PREFS_NAME = "rim_athkar_playback_state"

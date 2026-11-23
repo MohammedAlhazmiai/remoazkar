@@ -91,7 +91,7 @@ object NotificationHelper {
             "التسجيلات البشرية للأذكار",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "صوت تسجيل بشري بديل عندما لا يتوفر إذن المنبه الدقيق"
+            description = "تنبيه احتياطي إذا تعذّر بدء خدمة تشغيل التسجيل الصوتي"
             setSound(
                 humanAzkarUri,
                 AudioAttributes.Builder()
@@ -281,7 +281,7 @@ object NotificationHelper {
                     "التسجيل البشري — $displayName",
                     NotificationManager.IMPORTANCE_HIGH
                 ).apply {
-                    description = "يشغل المقطع البشري التالي بالتناوب عند تعذر تشغيل الخدمة الصوتية."
+                    description = "يشغّل المقطع البشري كتنبيه احتياطي عند تعذّر بدء خدمة الصوت."
                     setSound(soundUri, audioAttrs)
                     enableVibration(false)
                 }

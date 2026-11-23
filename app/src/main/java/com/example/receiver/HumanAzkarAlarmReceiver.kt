@@ -3,6 +3,7 @@ package com.example.receiver
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import androidx.core.content.ContextCompat
 import com.example.data.HumanAzkarScheduler
 import com.example.data.NotificationHelper
@@ -12,37 +13,37 @@ class HumanAzkarAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         if (!HumanAzkarScheduler.isEnabled(context)) return
 
-        val resourceName = HumanAzkarScheduler.takeNextTrackResource(context)
-        val canStartMediaService = HumanAzkarScheduler.canScheduleExactAlarms(context)
+        if (!HumanAzkarScheduler.canScheduleExactAlarms(context)) {
+            Log.w(TAG, "Exact-alarm access was revoked; pausing periodic human-azkar playback")
+            HumanAzkarScheduler.cancel(context)
+            return
+        }
 
-        if (canStartMediaService) {
+        val resourceName = HumanAzkarScheduler.takeNextTrackResource(context)
+        try {
             val playbackIntent = Intent(context, AudioAzkarPlaybackService::class.java).apply {
                 putExtra(AudioAzkarPlaybackService.EXTRA_TITLE, "أذكار صوتية بشرية")
                 putExtra(AudioAzkarPlaybackService.EXTRA_AUDIO_RESOURCE_NAME, resourceName)
             }
-            val started = runCatching {
-                ContextCompat.startForegroundService(context, playbackIntent)
-            }.isSuccess
-            if (!started) {
+            ContextCompat.startForegroundService(context, playbackIntent)
+        } catch (error: Exception) {
+            Log.e(TAG, "Android refused to start the human-azkar media service", error)
+            runCatching {
                 NotificationHelper.showHumanAzkarFallback(
                     context = context,
                     id = (System.currentTimeMillis() and 0x7fffffff).toInt(),
                     title = "حان وقت الذكر",
-                    body = "تعذّر بدء مشغل التسجيلات؛ سيصدر إشعار بالمقطع التالي.",
+                    body = "تعذّر بدء خدمة تشغيل التسجيلات. تحقق من إعدادات البطارية والسماح بالتشغيل في الخلفية.",
                     resourceName = resourceName
                 )
             }
-        } else {
-            NotificationHelper.showHumanAzkarFallback(
-                context = context,
-                id = (System.currentTimeMillis() and 0x7fffffff).toInt(),
-                title = "حان وقت الذكر",
-                body = "المقطع التالي من التسجيلات البشرية. اسمح بالمنبهات الدقيقة لتحسين الالتزام بالموعد.",
-                resourceName = resourceName
-            )
+        } finally {
+            // Schedule from alarm delivery time so a delayed Doze alarm does not create a catch-up burst.
+            HumanAzkarScheduler.rescheduleIfEnabled(context)
         }
+    }
 
-        // Keep notifications spaced from the alarm delivery time, even if Android delays it.
-        HumanAzkarScheduler.rescheduleIfEnabled(context)
+    private companion object {
+        const val TAG = "HumanAzkarAlarmReceiver"
     }
 }

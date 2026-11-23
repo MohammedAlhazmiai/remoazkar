@@ -1412,7 +1412,7 @@ private fun FloatingTasbeehCard() {
         }
         Spacer(Modifier.height(6.dp))
         Text(
-            "الاستثناء يمنع النظام من إيقاف المسبحة أو الأذكار الصوتية عند قفل الشاشة.",
+            "قد يقلل هذا الاستثناء من تقييد التشغيل في الخلفية على بعض الأجهزة، لكنه لا يتجاوز فرض الإيقاف أو قيود الشركات المصنّعة.",
             fontSize = 11.sp,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
         )

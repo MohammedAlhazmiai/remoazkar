@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.SystemClock
+import android.util.Log
 import com.example.receiver.HumanAzkarAlarmReceiver
 import com.example.service.AudioAzkarPlaybackService
 
@@ -20,6 +21,7 @@ object HumanAzkarScheduler {
     private const val KEY_INTERVAL_MINUTES = "interval_minutes"
     private const val KEY_NEXT_TRACK_INDEX = "next_track_index"
     private const val REQUEST_CODE = 9160
+    private const val TAG = "HumanAzkarScheduler"
     const val ACTION_ALARM = "com.example.action.HUMAN_AZKAR_INTERVAL_ALARM"
 
     fun isEnabled(context: Context): Boolean = prefs(context).getBoolean(KEY_ENABLED, false)
@@ -31,31 +33,57 @@ object HumanAzkarScheduler {
     fun canScheduleExactAlarms(context: Context): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return false
-        return alarmManager.canScheduleExactAlarms()
+        return exactAlarmAccessAllowsPlayback(Build.VERSION.SDK_INT, alarmManager.canScheduleExactAlarms())
     }
 
-    fun setEnabled(context: Context, enabled: Boolean) {
-        prefs(context).edit().putBoolean(KEY_ENABLED, enabled).apply()
-        if (enabled) {
-            scheduleNext(context)
-        } else {
+    internal fun exactAlarmAccessAllowsPlayback(apiLevel: Int, hasExactAlarmAccess: Boolean): Boolean =
+        apiLevel < Build.VERSION_CODES.S || hasExactAlarmAccess
+
+    /**
+     * Enables periodic playback only when Android can schedule the exact alarm that starts
+     * the background media service. Returns false without changing the preference if it cannot.
+     */
+    fun setEnabled(context: Context, enabled: Boolean): Boolean {
+        if (!enabled) {
+            prefs(context).edit().putBoolean(KEY_ENABLED, false).apply()
             cancel(context)
             context.stopService(Intent(context, AudioAzkarPlaybackService::class.java))
+            return true
         }
+
+        if (!canScheduleExactAlarms(context)) {
+            cancel(context)
+            return false
+        }
+
+        prefs(context).edit().putBoolean(KEY_ENABLED, true).apply()
+        if (scheduleNext(context)) return true
+
+        prefs(context).edit().putBoolean(KEY_ENABLED, false).apply()
+        cancel(context)
+        return false
     }
 
     fun setIntervalMinutes(context: Context, minutes: Int) {
         val safeMinutes = minutes.coerceIn(MIN_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES)
         prefs(context).edit().putInt(KEY_INTERVAL_MINUTES, safeMinutes).apply()
-        if (isEnabled(context)) scheduleNext(context)
+        if (isEnabled(context) && !scheduleNext(context)) cancel(context)
     }
 
-    /** Restarts the interval after a reboot, package update, or device time change. */
-    fun rescheduleIfEnabled(context: Context) {
-        if (isEnabled(context)) scheduleNext(context)
+    /** Restarts the interval after a reboot, package update, time change, or permission grant. */
+    fun rescheduleIfEnabled(context: Context): Boolean {
+        if (!isEnabled(context)) return false
+        if (!canScheduleExactAlarms(context)) {
+            // Do not replace actual audio playback with an inexact notification and imply success.
+            cancel(context)
+            return false
+        }
+        val scheduled = scheduleNext(context)
+        if (!scheduled) cancel(context)
+        return scheduled
     }
 
-    /** Selects clips in order and wraps around after all 28 have played. */
+    /** Selects clips in order and wraps around after all available clips have played. */
     fun takeNextTrackResource(context: Context): String {
         val sharedPrefs = prefs(context)
         val index = sharedPrefs.getInt(KEY_NEXT_TRACK_INDEX, 0)
@@ -71,35 +99,21 @@ object HumanAzkarScheduler {
         alarmManager.cancel(pendingIntent(context))
     }
 
-    private fun scheduleNext(context: Context) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
-        val pendingIntent = pendingIntent(context)
-        val triggerAt = SystemClock.elapsedRealtime() +
-            intervalMinutes(context).toLong() * 60_000L
+    private fun scheduleNext(context: Context): Boolean {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return false
+        if (!canScheduleExactAlarms(context)) return false
 
-        try {
-            if (canScheduleExactAlarms(context)) {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                    triggerAt,
-                    pendingIntent
-                )
-            } else {
-                alarmManager.setAndAllowWhileIdle(
-                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                    triggerAt,
-                    pendingIntent
-                )
-            }
-        } catch (_: SecurityException) {
-            // Keep a best-effort reminder if exact-alarm access was revoked during scheduling.
-            runCatching {
-                alarmManager.setAndAllowWhileIdle(
-                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                    triggerAt,
-                    pendingIntent
-                )
-            }
+        val triggerAt = SystemClock.elapsedRealtime() + intervalMinutes(context).toLong() * 60_000L
+        return runCatching {
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                triggerAt,
+                pendingIntent(context)
+            )
+            true
+        }.getOrElse { error ->
+            Log.e(TAG, "Could not schedule the exact human-azkar alarm", error)
+            false
         }
     }
 
