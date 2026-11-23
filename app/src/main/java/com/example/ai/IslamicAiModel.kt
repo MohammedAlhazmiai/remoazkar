@@ -59,7 +59,19 @@ object IslamicAiModel {
             )
         }
 
-        // 2. محاولة الاستعلام من نموذج الذكاء الاصطناعي التوليدي السحابي (Firebase AI Logic / Gemini 3.5 Flash Lite)
+        // 2. التحقق من الدردشة والتحيات والأسئلة التعريفية المحلية (IslamicDailyChatEngine)
+        val dailyMatch = IslamicDailyChatEngine.matchDailyChat(cleanQuery)
+        if (dailyMatch != null) {
+            return IslamicAiResponse(
+                text = dailyMatch.text,
+                domainTag = dailyMatch.domainTag,
+                detectedTopic = dailyMatch.detectedTopic,
+                references = emptyList(),
+                followUps = dailyMatch.followUps
+            )
+        }
+
+        // 3. محاولة الاستعلام من نموذج الذكاء الاصطناعي التوليدي السحابي (Firebase AI Logic / Gemini 3.5 Flash Lite)
         if (context != null && (cleanQuery.isNotBlank() || userAttachmentType.isNotBlank())) {
             val generativeText = runCatching {
                 kotlinx.coroutines.runBlocking {
@@ -105,18 +117,6 @@ object IslamicAiModel {
                     } else ""
                 )
             }
-        }
-
-        // 3. التحقق من الدردشة والتحيات والتفاعلات اليومية المحلية (Offline Daily Chat Training)
-        val dailyMatch = IslamicDailyChatEngine.matchDailyChat(cleanQuery)
-        if (dailyMatch != null) {
-            return IslamicAiResponse(
-                text = dailyMatch.text,
-                domainTag = dailyMatch.domainTag,
-                detectedTopic = dailyMatch.detectedTopic,
-                references = emptyList(),
-                followUps = dailyMatch.followUps
-            )
         }
 
         // 4. معالجة الصور والتسجيلات المرفوعة محلياً (Fallback)
