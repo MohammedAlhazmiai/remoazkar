@@ -202,6 +202,12 @@ private fun HumanRecordingsContent() {
         enabled = if (shouldEnable) applied else false
         if (shouldEnable && !applied) {
             Toast.makeText(context, "تعذّر تفعيل الجدولة. تحقق من صلاحية المنبهات الدقيقة.", Toast.LENGTH_LONG).show()
+        } else if (shouldEnable && applied) {
+            val firstRes = HumanAzkarScheduler.takeNextTrackResource(context)
+            val firstTrack = HumanAzkarAudioCatalog.trackByResourceName(firstRes)
+            if (firstTrack != null) {
+                startHumanRecording(context, firstTrack.resourceName, firstTrack.title)
+            }
         }
     }
 
@@ -396,22 +402,66 @@ private fun HumanRecordingsContent() {
             }
         }
         item {
-            Text("معاينة التسجيلات البشرية", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text(
+                "معاينة التسجيلات البشرية (${HumanAzkarAudioCatalog.tracks.size})",
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
+            )
         }
         items(HumanAzkarAudioCatalog.tracks, key = { it.resourceName }) { track ->
-            Card(shape = RoundedCornerShape(14.dp)) {
+            val isPlayingNow = AudioAzkarPlaybackService.activeResourceName == track.resourceName
+            Card(
+                shape = RoundedCornerShape(14.dp),
+                colors = if (isPlayingNow) {
+                    CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                } else {
+                    CardDefaults.cardColors()
+                }
+            ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(track.title, fontWeight = FontWeight.Medium)
-                        Text("تسجيل صوتي بشري", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Surface(
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            track.index.toString(),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
-                    IconButton(onClick = {
-                        startHumanRecording(context, track.resourceName, track.title)
-                    }) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = "تشغيل ${track.title}", tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(track.title, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            when {
+                                isPlayingNow -> "جارٍ النطق والتشغيل الآن..."
+                                track.index >= 24 -> "تسجيل صوتي بشري · مضاف حديثًا"
+                                else -> "تسجيل صوتي بشري"
+                            },
+                            fontSize = 11.sp,
+                            color = if (isPlayingNow) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(
+                        onClick = {
+                            if (isPlayingNow) {
+                                stopBackgroundPlayback(context)
+                            } else {
+                                startHumanRecording(context, track.resourceName, track.title)
+                            }
+                        },
+                        modifier = Modifier.minimumInteractiveComponentSize()
+                    ) {
+                        Icon(
+                            if (isPlayingNow) Icons.Default.Stop else Icons.Default.PlayArrow,
+                            contentDescription = if (isPlayingNow) "إيقاف ${track.title}" else "تشغيل ${track.title}",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             }

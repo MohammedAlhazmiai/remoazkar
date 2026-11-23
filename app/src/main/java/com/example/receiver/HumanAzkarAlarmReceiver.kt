@@ -20,9 +20,11 @@ class HumanAzkarAlarmReceiver : BroadcastReceiver() {
         }
 
         val resourceName = HumanAzkarScheduler.takeNextTrackResource(context)
+        val trackTitle = com.example.data.HumanAzkarAudioCatalog.trackByResourceName(resourceName)?.title
+            ?: "أذكار صوتية بشرية"
         try {
             val playbackIntent = Intent(context, AudioAzkarPlaybackService::class.java).apply {
-                putExtra(AudioAzkarPlaybackService.EXTRA_TITLE, "أذكار صوتية بشرية")
+                putExtra(AudioAzkarPlaybackService.EXTRA_TITLE, trackTitle)
                 putExtra(AudioAzkarPlaybackService.EXTRA_AUDIO_RESOURCE_NAME, resourceName)
             }
             ContextCompat.startForegroundService(context, playbackIntent)
@@ -32,7 +34,7 @@ class HumanAzkarAlarmReceiver : BroadcastReceiver() {
                 NotificationHelper.showHumanAzkarFallback(
                     context = context,
                     id = (System.currentTimeMillis() and 0x7fffffff).toInt(),
-                    title = "حان وقت الذكر",
+                    title = "حان وقت الذكر: $trackTitle",
                     body = "تعذّر بدء خدمة تشغيل التسجيلات. تحقق من إعدادات البطارية والسماح بالتشغيل في الخلفية.",
                     resourceName = resourceName
                 )

@@ -8,6 +8,8 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.os.Build
 import android.os.IBinder
@@ -15,6 +17,9 @@ import android.os.PowerManager
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.core.app.NotificationCompat
 import com.example.MainActivity
 import com.example.data.HumanAzkarAudioCatalog
@@ -41,6 +46,7 @@ class AudioAzkarPlaybackService : Service() {
     private var chunkIndex = 0
     private var mediaPlayer: MediaPlayer? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var audioFocusRequest: AudioFocusRequest? = null
 
     /** نوع التشغيل الحالي: تسجيل بشري أو نص عبر TTS. */
     private var playingHuman = false
@@ -139,6 +145,7 @@ class AudioAzkarPlaybackService : Service() {
     private fun startHumanTrack() {
         val track = HumanAzkarAudioCatalog.trackAt(humanIndex)
         pendingTitle = track.title
+        activeResourceName = track.resourceName
         acquireWakeLock()
         renewWakeLock()
         persistState(mode = MODE_HUMAN, title = track.title, text = "", index = humanIndex)
@@ -158,7 +165,7 @@ class AudioAzkarPlaybackService : Service() {
             return
         }
 
-        val resourceId = resources.getIdentifier(track.resourceName, "raw", packageName)
+        val resourceId = track.rawResId
         if (resourceId == 0) {
             reportHumanPlaybackFailure(
                 track.resourceName,
@@ -168,6 +175,7 @@ class AudioAzkarPlaybackService : Service() {
             return
         }
 
+        requestTransientAudioFocus()
         val player = MediaPlayer()
         mediaPlayer = player
         try {
@@ -178,6 +186,7 @@ class AudioAzkarPlaybackService : Service() {
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build()
             )
+            player.setVolume(1.0f, 1.0f)
             player.setOnPreparedListener { prepared ->
                 if (mediaPlayer === prepared) {
                     runCatching { prepared.start() }.onFailure { error ->
@@ -235,6 +244,45 @@ class AudioAzkarPlaybackService : Service() {
         finishHumanTrack()
     }
 
+    private fun requestTransientAudioFocus() {
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val focusReq = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+                    .setAcceptsDelayedFocusGain(false)
+                    .build()
+                audioFocusRequest = focusReq
+                audioManager.requestAudioFocus(focusReq)
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.requestAudioFocus(
+                    null,
+                    AudioManager.STREAM_MUSIC,
+                    AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+                )
+            }
+        }
+    }
+
+    private fun abandonTransientAudioFocus() {
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+                audioFocusRequest = null
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.abandonAudioFocus(null)
+            }
+        }
+    }
+
     /**
      * إنهاء تشغيل المقطع الحالي دون الانتقال إلى مقطع آخر.
      * المجدول الزمني (HumanAzkarScheduler) هو من يُحدّد موعد المقطع التالي حسب الفاصل المختار،
@@ -242,6 +290,7 @@ class AudioAzkarPlaybackService : Service() {
      */
     private fun finishHumanTrack() {
         playingHuman = false
+        activeResourceName = null
         prefs.edit().putBoolean(KEY_PLAYING, false).apply()
         releaseMediaPlayer()
         releaseWakeLock()
@@ -453,6 +502,7 @@ class AudioAzkarPlaybackService : Service() {
 
     private fun stopPlayback() {
         playingHuman = false
+        activeResourceName = null
         prefs.edit().putBoolean(KEY_PLAYING, false).apply()
         tts?.stop()
         releaseMediaPlayer()
@@ -462,15 +512,18 @@ class AudioAzkarPlaybackService : Service() {
     }
 
     private fun releaseMediaPlayer() {
-        val player = mediaPlayer ?: return
+        val player = mediaPlayer
         mediaPlayer = null
-        runCatching {
-            player.setOnPreparedListener(null)
-            player.setOnCompletionListener(null)
-            player.setOnErrorListener(null)
-            if (player.isPlaying) player.stop()
-            player.release()
+        if (player != null) {
+            runCatching {
+                player.setOnPreparedListener(null)
+                player.setOnCompletionListener(null)
+                player.setOnErrorListener(null)
+                if (player.isPlaying) player.stop()
+                player.release()
+            }
         }
+        abandonTransientAudioFocus()
     }
 
     /**
@@ -484,6 +537,7 @@ class AudioAzkarPlaybackService : Service() {
     }
 
     override fun onDestroy() {
+        activeResourceName = null
         releaseMediaPlayer()
         releaseWakeLock()
         tts?.stop()
@@ -513,6 +567,10 @@ class AudioAzkarPlaybackService : Service() {
         private const val KEY_INDEX = "index"
         private const val MODE_HUMAN = "human"
         private const val MODE_TEXT = "text"
+
+        /** المقطع البشري قيد التشغيل حاليًا في الخدمة الأمامية (إن وُجد). */
+        var activeResourceName by mutableStateOf<String?>(null)
+            private set
 
         /** هل هناك تشغيل جارٍ حاليًا؟ */
         fun isPlaying(context: Context): Boolean =

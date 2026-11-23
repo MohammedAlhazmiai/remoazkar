@@ -215,12 +215,12 @@ object NotificationHelper {
     ) {
         createChannels(context)
         val soundEnabled = PreferencesManager.isNotificationSoundEnabled(context)
-        val resolvedResourceId = context.resources.getIdentifier(resourceName, "raw", context.packageName)
-            .takeIf { it != 0 } ?: R.raw.human_azkar_01
-        val resolvedResourceName = HumanAzkarAudioCatalog.tracks
-            .firstOrNull { it.resourceName == resourceName }?.resourceName ?: "human_azkar_01"
-        val selectedTrack = HumanAzkarAudioCatalog.tracks
-            .firstOrNull { it.resourceName == resolvedResourceName }
+        val selectedTrack = HumanAzkarAudioCatalog.trackByResourceName(resourceName)
+        val resolvedResourceId = selectedTrack?.rawResId
+            ?: context.resources.getIdentifier(resourceName, "raw", context.packageName)
+                .takeIf { it != 0 }
+            ?: R.raw.human_azkar_01
+        val resolvedResourceName = selectedTrack?.resourceName ?: "human_azkar_01"
         val channel = if (soundEnabled) {
             humanAzkarTrackChannel(
                 context = context,
