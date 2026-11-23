@@ -41,6 +41,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.data.AthkarReminderScheduler
 import com.example.data.AppBackgroundStore
+import com.example.data.AppUpdateChecker
 import com.example.data.AppLocale
 import com.example.data.HijriCalendar
 import com.example.data.HisnRepository
@@ -54,12 +55,15 @@ import com.example.data.PreferencesSnapshot
 import com.example.data.QuranRepository
 import com.example.data.ReminderScheduler
 import com.example.data.TtsManager
+import com.example.data.UpdateCheckResult
 import com.example.service.FloatingTasbeehService
 import com.example.ui.components.AppBackgroundLayer
+import com.example.ui.components.AppUpdateDialog
 import com.example.ui.components.AppSettingsDrawer
 import com.example.ui.components.SmartReaderBus
 import com.example.ui.components.SmartReaderFab
 import com.example.ui.components.TtsMiniBar
+import com.example.ui.components.UpdateDialogState
 import com.example.ui.screens.AboutScreen
 import com.example.ui.screens.AudioAzkarScreen
 import com.example.ui.screens.AdiyaScreen
@@ -371,6 +375,42 @@ private fun AppRoot(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val updateChecker = remember(context.applicationContext) {
+        AppUpdateChecker(context.applicationContext)
+    }
+    val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
+    var updateDialog by remember { mutableStateOf<UpdateDialogState?>(null) }
+    var automaticUpdateCheckStarted by rememberSaveable { mutableStateOf(false) }
+
+    val requestUpdateCheck: () -> Unit = {
+        updateDialog = UpdateDialogState.Checking
+        scope.launch {
+            updateDialog = when (val result = updateChecker.check(force = true)) {
+                is UpdateCheckResult.Available -> UpdateDialogState.Available(result.update)
+                UpdateCheckResult.UpToDate -> UpdateDialogState.UpToDate
+                UpdateCheckResult.NoPublishedRelease -> UpdateDialogState.NoPublishedRelease
+                UpdateCheckResult.Skipped -> UpdateDialogState.UpToDate
+                UpdateCheckResult.Failed -> UpdateDialogState.Failed
+            }
+        }
+    }
+
+    LaunchedEffect(currentRoute) {
+        if (currentRoute == "home" && !automaticUpdateCheckStarted) {
+            automaticUpdateCheckStarted = true
+            if (updateChecker.shouldAutomaticallyCheck()) {
+                when (val result = updateChecker.check()) {
+                    is UpdateCheckResult.Available -> {
+                        if (!updateChecker.wasAutomaticallyPromptedFor(result.update.version)) {
+                            updateChecker.markAutomaticallyPrompted(result.update.version)
+                            updateDialog = UpdateDialogState.Available(result.update)
+                        }
+                    }
+                    else -> Unit
+                }
+            }
+        }
+    }
 
     val toggleFavorite: (String) -> Unit = { key ->
         scope.launch { preferencesManager.toggleFavorite(key) }
@@ -401,6 +441,7 @@ private fun AppRoot(
         onSmartReader = { go("ai_robot") },
         onExclusive = { go("exclusive") },
         onAdvancedSettings = { go("advanced_settings") },
+        onCheckForUpdates = requestUpdateCheck,
         onAbout = { go("about") },
         onSupportDeveloper = { go("support_developer") },
         onTelegram = { go("dev_link/telegram") },
@@ -714,5 +755,29 @@ private fun AppRoot(
                 TtsMiniBar()
             }
         }
+    }
+
+    updateDialog?.let { dialog ->
+        AppUpdateDialog(
+            state = dialog,
+            onDismiss = { updateDialog = null },
+            onDownload = { update ->
+                updateDialog = null
+                val downloadIntent = android.content.Intent(
+                    android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse(update.downloadUrl)
+                )
+                runCatching { context.startActivity(downloadIntent) }.onFailure {
+                    runCatching {
+                        context.startActivity(
+                            android.content.Intent(
+                                android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse(update.releaseUrl)
+                            )
+                        )
+                    }
+                }
+            }
+        )
     }
 }

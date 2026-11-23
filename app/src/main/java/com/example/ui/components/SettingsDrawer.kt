@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.filled.Update
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerState
@@ -109,6 +110,7 @@ fun AppSettingsDrawer(
     onSmartReader: () -> Unit,
     onExclusive: () -> Unit,
     onAdvancedSettings: () -> Unit,
+    onCheckForUpdates: () -> Unit,
     onAbout: () -> Unit,
     onSupportDeveloper: () -> Unit,
     onTelegram: () -> Unit,
@@ -327,6 +329,12 @@ fun AppSettingsDrawer(
                         title = tr("advanced_settings"),
                         value = "الصوت · الإشعارات · الخط",
                         onClick = { close(); onAdvancedSettings() }
+                    )
+                    DrawerRow(
+                        icon = Icons.Default.Update,
+                        title = tr("check_updates"),
+                        value = tr("check_updates_hint"),
+                        onClick = { close(); onCheckForUpdates() }
                     )
                     DrawerRow(
                         icon = Icons.Default.Image,
