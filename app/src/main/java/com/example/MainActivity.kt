@@ -77,6 +77,7 @@ import com.example.ui.screens.FavoritesScreen
 import com.example.ui.screens.HijriScreen
 import com.example.ui.screens.HisnChapterScreen
 import com.example.ui.screens.HisnScreen
+import com.example.ui.screens.IslamicAiScreen
 import com.example.ui.screens.KhatmahScreen
 import com.example.ui.screens.NamesOfAllahScreen
 import com.example.ui.screens.ProphetDuasScreen
@@ -487,6 +488,7 @@ private fun AppRoot(
                         onAgeCalculatorClick = { navController.navigate("age_calculator") },
                         onPrayerTimesClick = { navController.navigate("prayer_times") },
                         onQiblaClick = { navController.navigate("qibla") },
+                        onIslamicAiClick = { navController.navigate("islamic_ai_assistant") },
                         onFloatingTasbeehClick = {
                             val intent = android.content.Intent(context, FloatingTasbeehService::class.java)
                                 .setAction(FloatingTasbeehService.ACTION_START)
@@ -629,6 +631,10 @@ private fun AppRoot(
                     AiVoiceAssistantScreen(onBackClick = { navController.popBackStack() })
                 }
 
+                composable("islamic_ai_assistant") {
+                    IslamicAiScreen(onBackClick = { navController.popBackStack() })
+                }
+
                 composable("wird") {
                     WirdScreen(onBackClick = { navController.popBackStack() })
                 }
@@ -737,22 +743,24 @@ private fun AppRoot(
                 }
             }
 
-            // زر القارئ الذكي العائم — ظاهر في كل صفحات التطبيق
-            SmartReaderFab(
-                onOpenReader = { navController.navigate("ai_robot") },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = 92.dp)
-            )
+            if (currentRoute != "islamic_ai_assistant") {
+                // زر القارئ الذكي العائم — ظاهر في كل صفحات التطبيق ما عدا شاشة المحادثة حتى لا يغطي زر الإرسال
+                SmartReaderFab(
+                    onOpenReader = { navController.navigate("ai_robot") },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 16.dp, bottom = 92.dp)
+                )
 
-            // شريط القراءة العائم — يظهر أثناء قراءة القارئ الذكي
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 12.dp),
-                color = androidx.compose.ui.graphics.Color.Transparent
-            ) {
-                TtsMiniBar()
+                // شريط القراءة العائم — يظهر أثناء قراءة القارئ الذكي
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 12.dp),
+                    color = androidx.compose.ui.graphics.Color.Transparent
+                ) {
+                    TtsMiniBar()
+                }
             }
         }
     }

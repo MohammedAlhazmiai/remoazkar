@@ -73,7 +73,8 @@ fun HomeScreen(
     onAgeCalculatorClick: () -> Unit = {},
     onFloatingTasbeehClick: () -> Unit = {},
     onPrayerTimesClick: () -> Unit = {},
-    onQiblaClick: () -> Unit = {}
+    onQiblaClick: () -> Unit = {},
+    onIslamicAiClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val hijri = remember(HijriCalendar.offsetDays) { HijriCalendar.today() }
@@ -230,6 +231,10 @@ fun HomeScreen(
                     onPrayerTimesClick = onPrayerTimesClick,
                     onQiblaClick = onQiblaClick
                 )
+            }
+
+            item {
+                IslamicAiHomeCard(onClick = onIslamicAiClick)
             }
 
             item { HomeSectionTitle("الصلاة والقبلة") }
@@ -683,6 +688,66 @@ private fun SeasonalOccasionBanner(
                     lineHeight = 16.sp
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun IslamicAiHomeCard(onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .testTag("home_islamic_ai_card"),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        listOf(Color(0xF0184D3D), Color(0xEB102E25))
+                    )
+                )
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(Color(0x38FFD36A)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Psychology,
+                    contentDescription = null,
+                    tint = Color(0xFFFFD36A),
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "المساعد الإسلامي الذكي (محلي)",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp
+                )
+                Text(
+                    "يعمل بدون إنترنت • فتاوى، خطب، رسائل، خواطر، وتفسير أحلام",
+                    color = Color(0xFFD8EBE0),
+                    fontSize = 11.sp,
+                    maxLines = 2
+                )
+            }
+            Icon(
+                imageVector = Icons.Default.ChevronLeft,
+                contentDescription = "فتح المساعد الإسلامي الذكي",
+                tint = Color(0xFFFFD36A)
+            )
         }
     }
 }

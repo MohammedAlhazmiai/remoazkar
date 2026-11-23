@@ -69,6 +69,7 @@ object AppBackgroundStore {
         BackgroundPage("hijri", "التقويم الهجري"),
         BackgroundPage("custom_azkar", "أذكاري الخاصة"),
         BackgroundPage("ai_robot", "القارئ الذكي"),
+        BackgroundPage("islamic_ai_assistant", "المساعد الإسلامي الذكي"),
         BackgroundPage("wird", "الورد اليومي"),
         BackgroundPage("ruqyah", "الرقية الشرعية"),
         BackgroundPage("adiya", "الأدعية"),
