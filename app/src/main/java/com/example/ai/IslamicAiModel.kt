@@ -107,7 +107,19 @@ object IslamicAiModel {
             }
         }
 
-        // 3. معالجة الصور والتسجيلات المرفوعة محلياً (Fallback)
+        // 3. التحقق من الدردشة والتحيات والتفاعلات اليومية المحلية (Offline Daily Chat Training)
+        val dailyMatch = IslamicDailyChatEngine.matchDailyChat(cleanQuery)
+        if (dailyMatch != null) {
+            return IslamicAiResponse(
+                text = dailyMatch.text,
+                domainTag = dailyMatch.domainTag,
+                detectedTopic = dailyMatch.detectedTopic,
+                references = emptyList(),
+                followUps = dailyMatch.followUps
+            )
+        }
+
+        // 4. معالجة الصور والتسجيلات المرفوعة محلياً (Fallback)
         if (userAttachmentType == "image" && (cleanQuery.isBlank() || IslamicAiMultimodalHandler.isGenericMediaInquiry(cleanQuery))) {
             return IslamicAiMultimodalHandler.composeImageAnalysisReply(cleanQuery, userAttachmentUri, context, entries)
         }
