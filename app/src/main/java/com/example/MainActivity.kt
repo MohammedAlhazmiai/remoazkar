@@ -632,7 +632,10 @@ private fun AppRoot(
                 }
 
                 composable("islamic_ai_assistant") {
-                    IslamicAiScreen(onBackClick = { navController.popBackStack() })
+                    IslamicAiScreen(
+                        onBackClick = { navController.popBackStack() },
+                        onSupportDeveloperClick = { navController.navigate("support_developer") }
+                    )
                 }
 
                 composable("wird") {

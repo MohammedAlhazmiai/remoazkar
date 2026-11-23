@@ -47,6 +47,7 @@ object IslamicAiModel {
 
         return when (intent) {
             IslamicIntent.GREETING -> greetingResponse()
+            IslamicIntent.APPRECIATION -> appreciationResponse()
             IslamicIntent.FOLLOW_UP -> handleFollowUp(cleanQuery, entries, lastUserMsg, lastAssistantMsg)
             IslamicIntent.DREAMS -> composeDreamReply(cleanQuery, entries)
             IslamicIntent.LETTER -> composeCreativeReply(cleanQuery, IslamicIntent.LETTER, "letters", entries)
@@ -59,14 +60,14 @@ object IslamicAiModel {
     }
 
     private fun greetingResponse(): IslamicAiResponse = IslamicAiResponse(
-        text = "وعليكم السلام ورحمة الله وبركاته، أهلاً بك في **المساعد الإسلامي الذكي المحلي** (يعمل بدون إنترنت 100%).\n\n" +
-            "يسعدني خدمتك ومساعدتك في المجالات التالية:\n" +
+        text = "وعليكم السلام ورحمة الله وبركاته، أهلاً ومرحباً بك أخي الكريم في **المساعد الإسلامي الذكي المحلي** (يعمل بكفاءة عالية بدون إنترنت).\n\n" +
+            "يسعدني ويشرفني خدمتك بأسلوب عربي فصيح ومتزن في المجالات التالية:\n" +
             "• **الفتاوى والمسائل الفقهية:** الطهارة، الصلاة، الصيام ومفطراته، الزكاة، المعاملات، الأيمان، الأسرة، مع الأدلة من القرآن والسنة.\n" +
             "• **تفسير الأحلام وتعبير الرؤى:** وفق قواعد ابن سيرين والنابلسي والضوابط الشرعية.\n" +
-            "• **الرسائل الدينية والخواطر:** تهنئة، تعزية، مواساة، نصح أخوي، بر والدين، وتأملات إيمانية.\n" +
+            "• **الرسائل الدينية والخواطر:** تهنئة، تعزية، مواساة، اعتذار، بر والدين، وتأملات إيمانية.\n" +
             "• **الخطب والمحاضرات:** خطب جمعة كاملة الأركان ودروس دعوية بالمحاور والشواهد.\n" +
             "• **الاستدلال والبحث الديني:** استخراج الآيات القرآنية والأحاديث النبوية في أي موضوع.\n\n" +
-            "اكتب سؤالك أو طلبك الآن، وستُحفظ محادثتك محليًا للرجوع إليها في أي وقت.",
+            "تفضل بكتابة سؤالك أو طلبك، وستُحفظ محادثتك محليًا للعودة إليها في أي وقت.",
         domainTag = IslamicIntent.GREETING.arabicLabel,
         detectedTopic = "الترحيب والتعريف",
         references = emptyList(),
@@ -75,6 +76,19 @@ object IslamicAiModel {
             "فسر لي حلم المطر والبحر في المنام",
             "اكتب لي خطبة جمعة عن تقوى الله",
             "اكتب رسالة دينية للتهنئة بالعيد"
+        )
+    )
+
+    private fun appreciationResponse(): IslamicAiResponse = IslamicAiResponse(
+        text = "وجزاك الله خيرًا وبارك فيك وفي أهلك ووقتك أخي الكريم، شكرًا لطيب كلماتك ودعائك.\n\n" +
+            "أنا في خدمتك دائمًا لصياغة الرسائل الدينية والخواطر والخطب والمحاضرات، أو الإجابة على المسائل الفقهية وتفسير الرؤى بالأدلة الشرعية.\n" +
+            "تقبل الله منا ومنكم صالح الأعمال، وأسعدك في الدارين.",
+        domainTag = IslamicIntent.APPRECIATION.arabicLabel,
+        detectedTopic = "دعاء وشكر متبادل",
+        references = emptyList(),
+        followUps = listOf(
+            "اكتب لي خاطرة إيمانية عن شكر النعم",
+            "أعطني دعاءً جامعًا للخير كله"
         )
     )
 
@@ -459,6 +473,7 @@ object IslamicAiModel {
         targetDomain: String?
     ): List<Pair<CorpusEntry, Double>> {
         val queryIndexed = ArabicNlpEngine.indexText(query)
+        val queryEmbedding = NeuralArabicLanguageCore.encodeFromIndexed(queryIndexed)
         return entries.map { entry ->
             val domainBonus = if (targetDomain != null && entry.domain == targetDomain) 4.0 else 0.0
             val score = ArabicNlpEngine.scoreSemanticMatch(
@@ -466,7 +481,9 @@ object IslamicAiModel {
                 titleIndexed = entry.titleIndexed,
                 keywordsIndexed = entry.keywordsIndexed,
                 bodyIndexed = entry.bodyIndexed,
-                domainAffinity = domainBonus
+                domainAffinity = domainBonus,
+                queryEmbedding = queryEmbedding,
+                entryEmbedding = entry.denseEmbedding
             )
             entry to score
         }.sortedByDescending { it.second }

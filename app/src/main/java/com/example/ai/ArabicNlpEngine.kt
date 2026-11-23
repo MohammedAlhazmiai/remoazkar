@@ -3,6 +3,7 @@ package com.example.ai
 /** Intent domains supported by the local offline Islamic language model. */
 enum class IslamicIntent(val arabicLabel: String) {
     GREETING("ترحيب وتعريف"),
+    APPRECIATION("شكر وثناء"),
     FATWA("فتوى ومسألة فقهية"),
     DREAMS("تفسير الرؤى والأحلام"),
     LETTER("كتابة رسالة دينية"),
@@ -21,8 +22,8 @@ data class IndexedText(
 )
 
 /**
- * Pure-Kotlin Arabic NLP normalizer, light stemmer, intent classifier, and semantic scorer.
- * Runs 100% locally offline with zero external network dependencies.
+ * Pure-Kotlin Arabic NLP normalizer, dialect bridge, light stemmer, neural hybrid intent classifier,
+ * and semantic scorer. Runs 100% locally offline with zero external network dependencies.
  */
 object ArabicNlpEngine {
 
@@ -36,8 +37,9 @@ object ArabicNlpEngine {
         "هم", "هن", "انا", "اني", "انني", "نحن", "انت", "انتم", "هذا", "هذه", "ذلك", "تلك", "التي", "الذي",
         "الذين", "كل", "بعض", "غير", "عند", "بعد", "قبل", "بين", "تحت", "فوق", "حول", "ضد",
         "لي", "لك", "له", "لها", "لهم", "لنا", "منه", "منها", "فيه", "فيها", "عليه", "عليها",
-        "اكتب", "اكتبلي", "اكتبي", "اريد", "ابغى", "ممكن", "لو", "سمحت", "فضلك", "رجاء",
-        "اعطني", "اخبرني", "اشرح", "وضح", "حدثني", "قل", "قول", "شيء", "بشكل", "جدا", "بس",
+        "اكتب", "اكتبلي", "اكتبي", "اريد", "ابغي", "ابغا", "ابي", "عايز", "عاوز", "ودي",
+        "ممكن", "لو", "سمحت", "فضلك", "رجاء", "اعطني", "اخبرني", "اشرح", "وضح", "حدثني",
+        "قل", "قول", "شيء", "بشكل", "جدا", "بس", "وش", "ايش", "شو", "ليش", "عشان",
         "حلمت", "رايت", "احلم", "منام", "البارحه", "شاهدت"
     )
 
@@ -53,7 +55,27 @@ object ArabicNlpEngine {
             .replace('ؤ', 'و')
             .replace('ئ', 'ي')
         text = NON_ARABIC_OR_DIGIT.replace(text, " ")
-        return MULTI_SPACE.replace(text, " ").trim()
+        text = MULTI_SPACE.replace(text, " ").trim()
+        return bridgeColloquialForms(text)
+    }
+
+    /** تحويل الصيغ الدارجة الشائعة إلى ما يقابلها فصحى لضمان سرعة الفهم في كل اللهجات العربية. */
+    private fun bridgeColloquialForms(norm: String): String {
+        var s = " $norm "
+        s = s.replace(" فسرلي ", " فسر لي ")
+            .replace(" اكتبلي ", " اكتب لي ")
+            .replace(" اعطيني ", " اعطني ")
+            .replace(" قولي ", " قل لي ")
+            .replace(" علمني ", " اخبرني ")
+            .replace(" وش حكم ", " ما حكم ")
+            .replace(" ايش حكم ", " ما حكم ")
+            .replace(" شو حكم ", " ما حكم ")
+            .replace(" وش تفسير ", " ما تفسير ")
+            .replace(" ايش تفسير ", " ما تفسير ")
+            .replace(" حلمتلك ", " حلمت ")
+            .replace(" شفت في المنام ", " رايت في المنام ")
+            .replace(" تحلمت ", " حلمت ")
+        return MULTI_SPACE.replace(s, " ").trim()
     }
 
     fun lightStem(word: String): String {
@@ -94,12 +116,20 @@ object ArabicNlpEngine {
         val norm = normalize(query)
         val tokens = norm.split(' ').filter { it.isNotBlank() }
 
-        if (tokens.size <= 4 && GREETING_SIGNALS.any { norm == it || norm.startsWith("$it ") }) {
+        if (tokens.size <= 5 && GREETING_SIGNALS.any { norm == it || norm.startsWith("$it ") }) {
             val hasOtherIntent = listOf(
                 DREAM_SIGNALS, FATWA_SIGNALS, LETTER_SIGNALS, KHUTBAH_SIGNALS,
                 LECTURE_SIGNALS, KHATIRA_SIGNALS
             ).any { list -> list.any { norm.contains(it) } }
             if (!hasOtherIntent) return IslamicIntent.GREETING
+        }
+
+        if (tokens.size <= 6 && APPRECIATION_SIGNALS.any { norm == it || norm.contains(it) }) {
+            val hasActionIntent = listOf(
+                DREAM_SIGNALS, FATWA_SIGNALS, LETTER_SIGNALS, KHUTBAH_SIGNALS,
+                LECTURE_SIGNALS, KHATIRA_SIGNALS
+            ).any { list -> list.any { norm.contains(it) } }
+            if (!hasActionIntent) return IslamicIntent.APPRECIATION
         }
 
         if (hasPriorContext && tokens.size <= 10) {
@@ -110,7 +140,7 @@ object ArabicNlpEngine {
             if (isFollowUpPhrase && !isExplicitNewDomain) return IslamicIntent.FOLLOW_UP
         }
 
-        val scores = mutableMapOf(
+        val ruleScores = mutableMapOf(
             IslamicIntent.DREAMS to scoreSignals(norm, DREAM_SIGNALS, exactBonus = 5),
             IslamicIntent.KHUTBAH to scoreSignals(norm, KHUTBAH_SIGNALS, exactBonus = 5),
             IslamicIntent.LECTURE to scoreSignals(norm, LECTURE_SIGNALS, exactBonus = 5),
@@ -120,15 +150,32 @@ object ArabicNlpEngine {
             IslamicIntent.CHAT_QA to scoreSignals(norm, QA_SIGNALS, exactBonus = 2)
         )
 
-        val best = scores.maxByOrNull { it.value }
-        if (best != null && best.value > 0) {
-            return best.key
+        val bestRule = ruleScores.maxByOrNull { it.value }
+        if (bestRule != null && bestRule.value > 0) {
+            return bestRule.key
         }
-        return if (hasPriorContext && norm.length < 28 && tokens.size <= 4) {
-            IslamicIntent.FOLLOW_UP
+
+        if (hasPriorContext && norm.length < 28 && tokens.size <= 4) {
+            return IslamicIntent.FOLLOW_UP
+        }
+
+        // Fallback إلى التصنيف العصبي بالمتجهات الكثيفة عند عدم وجود كلمات مفتاحية صريحة
+        val isQuestionForm = norm.startsWith("هل ") || norm.startsWith("ما ") || norm.startsWith("كم ") ||
+            norm.startsWith("متي ") || norm.startsWith("كيف ") || norm.startsWith("لماذا ")
+        val neuralProbs = NeuralArabicLanguageCore.classifyIntentDistribution(query)
+        val filteredNeural = if (isQuestionForm) {
+            neuralProbs.filterKeys {
+                it == IslamicIntent.FATWA || it == IslamicIntent.CHAT_QA || it == IslamicIntent.DREAMS
+            }
         } else {
-            IslamicIntent.CHAT_QA
+            neuralProbs
         }
+        val bestNeural = filteredNeural.maxByOrNull { it.value }
+        if (bestNeural != null && bestNeural.value >= 0.16) {
+            return bestNeural.key
+        }
+
+        return if (isQuestionForm) IslamicIntent.FATWA else IslamicIntent.CHAT_QA
     }
 
     private fun scoreSignals(norm: String, signals: List<String>, exactBonus: Int): Int {
@@ -146,7 +193,9 @@ object ArabicNlpEngine {
         titleIndexed: IndexedText,
         keywordsIndexed: IndexedText,
         bodyIndexed: IndexedText,
-        domainAffinity: Double = 0.0
+        domainAffinity: Double = 0.0,
+        queryEmbedding: FloatArray? = null,
+        entryEmbedding: FloatArray? = null
     ): Double {
         if (queryIndexed.stems.isEmpty() && queryIndexed.normalized.isBlank()) return 0.0
 
@@ -187,6 +236,14 @@ object ArabicNlpEngine {
             }
         }
 
+        // Hybrid Dense Neural Cosine Reranking (handles Arabic spelling variants & paraphrases)
+        if (queryEmbedding != null && entryEmbedding != null && entryEmbedding.isNotEmpty()) {
+            val neuralCosine = NeuralArabicLanguageCore.cosineSimilarity(queryEmbedding, entryEmbedding)
+            if (neuralCosine >= 0.16 && (score > 0.0 || neuralCosine >= 0.30)) {
+                score += neuralCosine * 12.0
+            }
+        }
+
         if (score <= 0.0) return 0.0
         score += domainAffinity
 
@@ -196,7 +253,12 @@ object ArabicNlpEngine {
     }
 
     private val GREETING_SIGNALS = listOf(
-        "السلام عليكم", "سلام عليكم", "مرحبا", "اهلا", "صباح الخير", "مساء الخير", "من انت", "عرفني بنفسك"
+        "السلام عليكم", "سلام عليكم", "مرحبا", "اهلا", "صباح الخير", "مساء الخير", "من انت", "عرفني بنفسك", "اهلين", "حياك"
+    )
+
+    private val APPRECIATION_SIGNALS = listOf(
+        "شكرا", "جزاك الله خيرا", "جزاك الله خير", "بارك الله فيك", "احسنت", "ممتاز", "رائع",
+        "الله يسعدك", "يعطيك العافيه", "مشكور", "تسلم", "تقبل الله", "امين"
     )
 
     private val FOLLOW_UP_SIGNALS = listOf(
@@ -228,10 +290,12 @@ object ArabicNlpEngine {
     )
 
     private val FATWA_SIGNALS = listOf(
-        "ما حكم", "هل يجوز", "حكم", "فتوي", "فتوى", "فقه", "فقهيه", "يفطر", "مفطرات",
+        "ما حكم", "هل يجوز", "حكم", "فتوي", "فتوى", "فقه", "فقهيه", "يفطر", "تفطر", "مفطرات",
+        "الصيام", "صيام", "الصايم", "صايم", "بخاخ الربو", "قطره العين",
         "ينقض", "نواقض", "كفاره", "كفارة", "زكاه", "زكاة", "نصاب", "قصر", "جمع",
         "سجود السهو", "مسح علي الخفين", "تيمم", "غسل", "جنابه", "حيض", "طلاق", "ربا",
-        "تورق", "بطاقه ائتمانيه", "نذر", "يمين", "اضحيه", "قضاء الصيام", "فوائد البنوك"
+        "تورق", "بطاقه ائتمانيه", "نذر", "يمين", "اضحيه", "قضاء الصيام", "فوائد البنوك",
+        "شروط الصلاه", "اركان الصلاه", "واجبات الصلاه", "مبطلات الصلاه", "نجاسه", "وسوسه", "ميراث", "دين"
     )
 
     private val QA_SIGNALS = listOf(

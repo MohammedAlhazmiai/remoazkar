@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.OfflinePin
 import androidx.compose.material.icons.filled.Share
@@ -36,11 +37,13 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
@@ -52,8 +55,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.ai.AiChatRepository
@@ -251,7 +260,9 @@ fun AiMessageBubble(
     onCopy: (String) -> Unit,
     onSpeak: (String) -> Unit,
     onShare: (String) -> Unit,
-    onFollowUpClick: (String) -> Unit
+    onFollowUpClick: (String) -> Unit,
+    onSupportDeveloperClick: () -> Unit = {},
+    onShareApp: () -> Unit = {}
 ) {
     val isUser = message.role == AiChatRepository.ROLE_USER
     val followUps = remember(message.followUpsSerialized) {
@@ -382,6 +393,106 @@ fun AiMessageBubble(
                             }
                         }
                     }
+
+                    Spacer(Modifier.height(10.dp))
+                    DeveloperSupportPromptFooter(
+                        onSupportDeveloperClick = onSupportDeveloperClick,
+                        onShareApp = onShareApp
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeveloperSupportPromptFooter(
+    onSupportDeveloperClick: () -> Unit,
+    onShareApp: () -> Unit
+) {
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val annotatedSupportNotice = remember(primaryColor) {
+        buildAnnotatedString {
+            append(
+                "إذا أعجبك تطبيقنا وخدماتنا يمكنك دعم المطور حسب ما تستطيع ليستطيع مواصلة تطوير التطبيق، " +
+                    "وذلك من خلال الدعم الموجود أسفل الإعدادات أو "
+            )
+            withLink(
+                LinkAnnotation.Clickable(
+                    tag = "support_developer_link",
+                    styles = TextLinkStyles(
+                        style = SpanStyle(
+                            color = primaryColor,
+                            fontWeight = FontWeight.Bold,
+                            textDecoration = TextDecoration.Underline
+                        )
+                    ),
+                    linkInteractionListener = { onSupportDeveloperClick() }
+                )
+            ) {
+                append("الضغط هنا")
+            }
+            append(
+                "، وهو أمرٌ ليس إلزاميًا، وأرجو منك مشاركة التطبيق مع كل من تحب، " +
+                    "ولا تنسَ الدعاء للمطور محمد الحزمي جزاك الله خيرًا."
+            )
+        }
+    }
+
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.48f)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = annotatedSupportNotice,
+                fontSize = 11.5.sp,
+                lineHeight = 18.sp,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilledTonalButton(
+                    onClick = onSupportDeveloperClick,
+                    modifier = Modifier
+                        .weight(1f)
+                        .minimumInteractiveComponentSize()
+                        .testTag("ai_support_developer_button"),
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Favorite,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = Color(0xFFD84359)
+                    )
+                    Spacer(Modifier.width(5.dp))
+                    Text("ادعم المطور", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+                OutlinedButton(
+                    onClick = onShareApp,
+                    modifier = Modifier
+                        .weight(1f)
+                        .minimumInteractiveComponentSize()
+                        .testTag("ai_share_app_button"),
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Share,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(5.dp))
+                    Text("مشاركة التطبيق", fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 }
             }
         }

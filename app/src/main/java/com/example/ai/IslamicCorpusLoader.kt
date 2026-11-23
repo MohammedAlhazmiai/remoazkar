@@ -21,8 +21,12 @@ data class CorpusEntry(
     val followUps: List<String>,
     val titleIndexed: IndexedText,
     val keywordsIndexed: IndexedText,
-    val bodyIndexed: IndexedText
-)
+    val bodyIndexed: IndexedText,
+    val denseEmbedding: FloatArray = FloatArray(0)
+) {
+    override fun equals(other: Any?): Boolean = (other is CorpusEntry) && id == other.id && domain == other.domain
+    override fun hashCode(): Int = id.hashCode() * 31 + domain.hashCode()
+}
 
 @JsonClass(generateAdapter = true)
 internal data class RawCorpusDocument(
@@ -95,6 +99,7 @@ object IslamicCorpusLoader {
 
             val combinedKeywords = (cleanKeywords + cleanSynonyms).joinToString(" ")
             val combinedBody = "$cleanContent $cleanQuran $cleanHadith $cleanNote"
+            val semanticDocIndexed = ArabicNlpEngine.indexText("$cleanTitle $combinedKeywords $cleanContent")
 
             CorpusEntry(
                 id = raw.id.ifBlank { "entry_$index" },
@@ -109,7 +114,11 @@ object IslamicCorpusLoader {
                 followUps = cleanFollowUps,
                 titleIndexed = ArabicNlpEngine.indexText(cleanTitle),
                 keywordsIndexed = ArabicNlpEngine.indexText(combinedKeywords),
-                bodyIndexed = ArabicNlpEngine.indexText(combinedBody)
+                bodyIndexed = ArabicNlpEngine.indexText(combinedBody),
+                denseEmbedding = NeuralArabicLanguageCore.encodeFromIndexed(
+                    indexed = semanticDocIndexed,
+                    titleBoostText = "$cleanTitle $combinedKeywords"
+                )
             )
         }
     }

@@ -128,4 +128,22 @@ class IslamicAiModelTest {
         assertTrue(moreEvidence.text.contains("التوبة") || moreEvidence.text.contains("زكاة") || moreEvidence.text.contains("القرآن"))
         assertTrue(moreEvidence.references.isNotEmpty())
     }
+
+    @Test
+    fun neuralEmbeddingsAndDialectBridgeHandleColloquialAndAppreciationPrompts() {
+        val v1 = NeuralArabicLanguageCore.encodeDenseVector("ما حكم صلاة المسافر والقصر في الطائرة")
+        val v2 = NeuralArabicLanguageCore.encodeDenseVector("وش حكم قصر الصلاة في الطياره وقت السفر")
+        val unrelated = NeuralArabicLanguageCore.encodeDenseVector("تفسير حلم سقوط الاسنان والذهب")
+        val simRelated = NeuralArabicLanguageCore.cosineSimilarity(v1, v2)
+        val simUnrelated = NeuralArabicLanguageCore.cosineSimilarity(v1, unrelated)
+        assertTrue("Expected dialectal travel prayer vectors to correlate more strongly ($simRelated vs $simUnrelated)", simRelated > simUnrelated)
+
+        val colloquialReply = IslamicAiModel.generateReply("وش حكم بخاخ الربو في الصيام", corpus)
+        assertEquals(IslamicIntent.FATWA.arabicLabel, colloquialReply.domainTag)
+        assertTrue(colloquialReply.text.contains("لا تفطر") || colloquialReply.text.contains("لا يُفطر"))
+
+        val thanksReply = IslamicAiModel.generateReply("جزاك الله خيرا وبارك فيك", corpus)
+        assertEquals(IslamicIntent.APPRECIATION.arabicLabel, thanksReply.domainTag)
+        assertTrue(thanksReply.text.contains("وجزاك الله خيرًا"))
+    }
 }

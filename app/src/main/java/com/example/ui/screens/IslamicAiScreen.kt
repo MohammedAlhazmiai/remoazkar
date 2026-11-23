@@ -102,6 +102,7 @@ private val QUICK_PROMPTS = listOf(
 @Composable
 fun IslamicAiScreen(
     onBackClick: () -> Unit,
+    onSupportDeveloperClick: () -> Unit = {},
     viewModel: IslamicAiViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -337,7 +338,9 @@ fun IslamicAiScreen(
                                 },
                                 onSpeak = { content -> TtsManager.toggle(content) },
                                 onShare = { content -> ShareUtil.share(context, content) },
-                                onFollowUpClick = { prompt -> viewModel.sendMessage(prompt) }
+                                onFollowUpClick = { prompt -> viewModel.sendMessage(prompt) },
+                                onSupportDeveloperClick = onSupportDeveloperClick,
+                                onShareApp = { ShareUtil.share(context, ShareUtil.inviteMessage()) }
                             )
                         }
                         if (state.isGenerating) {
