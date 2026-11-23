@@ -30,7 +30,8 @@ data class IslamicAiUiState(
     val messages: List<AiMessageEntity> = emptyList(),
     val isGenerating: Boolean = false,
     val isModelReady: Boolean = false,
-    val trainedEntriesCount: Int = 0
+    val trainedEntriesCount: Int = 0,
+    val dismissedSupportMessageIds: Set<Long> = emptySet()
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -44,6 +45,7 @@ class IslamicAiViewModel(application: Application) : AndroidViewModel(applicatio
     private val isGeneratingFlow = MutableStateFlow(false)
     private val modelReadyFlow = MutableStateFlow(false)
     private val entriesCountFlow = MutableStateFlow(0)
+    private val dismissedSupportIdsFlow = MutableStateFlow<Set<Long>>(emptySet())
 
     private var loadedEntries: List<CorpusEntry> = emptyList()
 
@@ -57,7 +59,8 @@ class IslamicAiViewModel(application: Application) : AndroidViewModel(applicatio
         messagesFlow,
         isGeneratingFlow,
         modelReadyFlow,
-        entriesCountFlow
+        entriesCountFlow,
+        dismissedSupportIdsFlow
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         IslamicAiUiState(
@@ -66,7 +69,8 @@ class IslamicAiViewModel(application: Application) : AndroidViewModel(applicatio
             messages = values[2] as List<AiMessageEntity>,
             isGenerating = values[3] as Boolean,
             isModelReady = values[4] as Boolean,
-            trainedEntriesCount = values[5] as Int
+            trainedEntriesCount = values[5] as Int,
+            dismissedSupportMessageIds = values[6] as Set<Long>
         )
     }.stateIn(
         scope = viewModelScope,
@@ -100,12 +104,47 @@ class IslamicAiViewModel(application: Application) : AndroidViewModel(applicatio
         activeConversationIdFlow.value = conversationId
     }
 
+    fun dismissSupportPrompt(messageId: Long) {
+        dismissedSupportIdsFlow.value = dismissedSupportIdsFlow.value + messageId
+    }
+
     fun deleteConversation(conversationId: Long) {
         viewModelScope.launch(Dispatchers.IO) {
             if (activeConversationIdFlow.value == conversationId) {
                 activeConversationIdFlow.value = null
             }
             repository.deleteConversation(conversationId)
+        }
+    }
+
+    companion object {
+        private val EXCLUDED_SUPPORT_TAGS = setOf(
+            "ترحيب وتعريف",
+            "شكر وثناء",
+            "متابعة السياق",
+            "ملخص موجز",
+            "دعاء مأثور"
+        )
+
+        /**
+         * يضبط ظهور رسالة دعم المطور لتظهر أحيانًا فقط عند إتمام مهام فعلية مختارة
+         * (مثل المهمة الثانية ثم كل ثلاث مهام مكتملة)، وليس بعد كل طلب أو رسالة دردشة أو تحية.
+         */
+        fun shouldShowSupportPrompt(
+            messages: List<AiMessageEntity>,
+            messageIndex: Int,
+            dismissedMessageIds: Set<Long>
+        ): Boolean {
+            val msg = messages.getOrNull(messageIndex) ?: return false
+            if (msg.role != AiChatRepository.ROLE_ASSISTANT) return false
+            if (msg.id in dismissedMessageIds) return false
+            if (msg.categoryTag in EXCLUDED_SUPPORT_TAGS) return false
+
+            val completedTaskOrdinal = messages
+                .take(messageIndex + 1)
+                .count { it.role == AiChatRepository.ROLE_ASSISTANT && it.categoryTag !in EXCLUDED_SUPPORT_TAGS }
+
+            return completedTaskOrdinal >= 2 && (completedTaskOrdinal - 2) % 3 == 0
         }
     }
 

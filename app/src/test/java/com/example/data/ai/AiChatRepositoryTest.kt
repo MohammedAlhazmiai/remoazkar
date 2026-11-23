@@ -1,11 +1,13 @@
 package com.example.data.ai
 
+import com.example.ui.viewmodel.IslamicAiViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -122,5 +124,29 @@ class AiChatRepositoryTest {
         repo.deleteConversation(convId)
         assertNull(repo.getLatestConversation())
         assertTrue(repo.observeMessages(convId).first().isEmpty())
+    }
+
+    @Test
+    fun supportPromptShowsOccasionallyAndRespectsDismissState() {
+        val msgs = listOf(
+            AiMessageEntity(id = 1L, conversationId = 1L, role = AiChatRepository.ROLE_ASSISTANT, content = "اهلا", categoryTag = "ترحيب وتعريف"),
+            AiMessageEntity(id = 2L, conversationId = 1L, role = AiChatRepository.ROLE_ASSISTANT, content = "فتوى 1", categoryTag = "فتوى ومسألة فقهية"),
+            AiMessageEntity(id = 3L, conversationId = 1L, role = AiChatRepository.ROLE_ASSISTANT, content = "شكر", categoryTag = "شكر وثناء"),
+            AiMessageEntity(id = 4L, conversationId = 1L, role = AiChatRepository.ROLE_ASSISTANT, content = "خطبة 2", categoryTag = "خطبة منبرية"),
+            AiMessageEntity(id = 5L, conversationId = 1L, role = AiChatRepository.ROLE_ASSISTANT, content = "حلم 3", categoryTag = "تفسير الرؤى والأحلام"),
+            AiMessageEntity(id = 6L, conversationId = 1L, role = AiChatRepository.ROLE_ASSISTANT, content = "رسالة 4", categoryTag = "كتابة رسالة دينية"),
+            AiMessageEntity(id = 7L, conversationId = 1L, role = AiChatRepository.ROLE_ASSISTANT, content = "محاضرة 5", categoryTag = "محاضرة ودرس دعوي")
+        )
+
+        assertFalse(IslamicAiViewModel.shouldShowSupportPrompt(msgs, 0, emptySet())) // ترحيب
+        assertFalse(IslamicAiViewModel.shouldShowSupportPrompt(msgs, 1, emptySet())) // مهمة 1
+        assertFalse(IslamicAiViewModel.shouldShowSupportPrompt(msgs, 2, emptySet())) // شكر
+        assertTrue(IslamicAiViewModel.shouldShowSupportPrompt(msgs, 3, emptySet()))  // مهمة 2 -> يظهر
+        assertFalse(IslamicAiViewModel.shouldShowSupportPrompt(msgs, 4, emptySet())) // مهمة 3 -> لا يظهر
+        assertFalse(IslamicAiViewModel.shouldShowSupportPrompt(msgs, 5, emptySet())) // مهمة 4 -> لا يظهر
+        assertTrue(IslamicAiViewModel.shouldShowSupportPrompt(msgs, 6, emptySet()))  // مهمة 5 -> يظهر
+
+        // إخفاء عند ضغط المستخدم على زر إخفاء
+        assertFalse(IslamicAiViewModel.shouldShowSupportPrompt(msgs, 3, setOf(4L)))
     }
 }

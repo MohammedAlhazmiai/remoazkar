@@ -22,7 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -329,9 +329,16 @@ fun IslamicAiScreen(
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 14.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        items(state.messages, key = { it.id }) { msg ->
+                        itemsIndexed(state.messages, key = { _, msg -> msg.id }) { index, msg ->
+                            val showSupport = IslamicAiViewModel.shouldShowSupportPrompt(
+                                messages = state.messages,
+                                messageIndex = index,
+                                dismissedMessageIds = state.dismissedSupportMessageIds
+                            )
                             AiMessageBubble(
                                 message = msg,
+                                showSupportPrompt = showSupport,
+                                onDismissSupportPrompt = { viewModel.dismissSupportPrompt(msg.id) },
                                 onCopy = { content ->
                                     clipboard.setText(AnnotatedString(content))
                                     Toast.makeText(context, "تم نسخ النص", Toast.LENGTH_SHORT).show()

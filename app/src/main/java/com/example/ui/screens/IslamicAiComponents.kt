@@ -1,5 +1,10 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +30,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Favorite
@@ -257,6 +263,8 @@ fun AiConversationsDrawerSheet(
 @Composable
 fun AiMessageBubble(
     message: AiMessageEntity,
+    showSupportPrompt: Boolean = false,
+    onDismissSupportPrompt: () -> Unit = {},
     onCopy: (String) -> Unit,
     onSpeak: (String) -> Unit,
     onShare: (String) -> Unit,
@@ -394,11 +402,20 @@ fun AiMessageBubble(
                         }
                     }
 
-                    Spacer(Modifier.height(10.dp))
-                    DeveloperSupportPromptFooter(
-                        onSupportDeveloperClick = onSupportDeveloperClick,
-                        onShareApp = onShareApp
-                    )
+                    AnimatedVisibility(
+                        visible = showSupportPrompt,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically()
+                    ) {
+                        Column {
+                            Spacer(Modifier.height(10.dp))
+                            DeveloperSupportPromptFooter(
+                                onSupportDeveloperClick = onSupportDeveloperClick,
+                                onShareApp = onShareApp,
+                                onDismiss = onDismissSupportPrompt
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -408,7 +425,8 @@ fun AiMessageBubble(
 @Composable
 private fun DeveloperSupportPromptFooter(
     onSupportDeveloperClick: () -> Unit,
-    onShareApp: () -> Unit
+    onShareApp: () -> Unit,
+    onDismiss: () -> Unit
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
     val annotatedSupportNotice = remember(primaryColor) {
@@ -446,9 +464,48 @@ private fun DeveloperSupportPromptFooter(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "دعم وتطوير التطبيق (اختياري)",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Surface(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .minimumInteractiveComponentSize()
+                        .testTag("hide_support_prompt_button"),
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "إخفاء الرسالة ومواصلة المحادثة",
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "إخفاء",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
             Text(
                 text = annotatedSupportNotice,
                 fontSize = 11.5.sp,
