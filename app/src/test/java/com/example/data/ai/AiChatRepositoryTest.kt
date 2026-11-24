@@ -154,10 +154,10 @@ class AiChatRepositoryTest {
     fun dailyChatAndIslamicGuidanceTagsDoNotCountAsCompletedTasks() {
         val msgs = listOf(
             AiMessageEntity(id = 1L, conversationId = 1L, role = AiChatRepository.ROLE_ASSISTANT, content = "أهلًا", categoryTag = "ترحيب وتعريف"),
-            AiMessageEntity(id = 2L, conversationId = 1L, role = AiChatRepository.ROLE_ASSISTANT, content = "كيف يومك؟", categoryTag = "دردشة يومية ودية"),
+            AiMessageEntity(id = 2L, conversationId = 1L, role = AiChatRepository.ROLE_ASSISTANT, content = "كيف يومك؟", categoryTag = "دردشة أخوية يومية"),
             AiMessageEntity(id = 3L, conversationId = 1L, role = AiChatRepository.ROLE_ASSISTANT, content = "أنا معك", categoryTag = "مواساة ودعم إيماني"),
             AiMessageEntity(id = 4L, conversationId = 1L, role = AiChatRepository.ROLE_ASSISTANT, content = "نصيحة", categoryTag = "نصيحة إيمانية وعملية"),
-            AiMessageEntity(id = 5L, conversationId = 1L, role = AiChatRepository.ROLE_ASSISTANT, content = "توجيه", categoryTag = "دردشة واستدلال ذكي"),
+            AiMessageEntity(id = 5L, conversationId = 1L, role = AiChatRepository.ROLE_ASSISTANT, content = "توجيه", categoryTag = "حوار واستدلال ذكي"),
             AiMessageEntity(id = 6L, conversationId = 1L, role = AiChatRepository.ROLE_ASSISTANT, content = "مهمة أولى", categoryTag = "فتوى ومسألة فقهية"),
             AiMessageEntity(id = 7L, conversationId = 1L, role = AiChatRepository.ROLE_ASSISTANT, content = "مهمة ثانية", categoryTag = "خطبة منبرية")
         )

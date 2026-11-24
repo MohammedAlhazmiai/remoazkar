@@ -148,31 +148,11 @@ class IslamicAiModelTest {
     }
 
     @Test
-    fun worldlyPromptReceivesIslamicContextInsteadOfOutOfScopeApology() {
-        val reply = IslamicAiModel.generateReply("اكتب كود بايثون لفرز مصفوفة ارقام", corpus)
-        assertEquals("دردشة يومية ودية", reply.domainTag)
-        assertTrue(reply.text.contains("منظور إسلامي"))
-        assertTrue(reply.text.contains("بايثون"))
-
-        val sports = IslamicAiModel.generateReply("من هو افضل لاعب ميسي ام رونالدو؟", corpus)
-        assertEquals("دردشة يومية ودية", sports.domainTag)
-        assertTrue(sports.text.contains("منظور إسلامي"))
-        assertTrue(sports.text.contains("ميسي"))
-    }
-
-    @Test
-    fun dailyFriendChatReachesWarmIslamicRepliesInsteadOfGuardrailOrRandomFatwa() {
-        val greeting = IslamicAiModel.generateReply("كيف حالك؟", corpus)
-        assertEquals("دردشة يومية ودية", greeting.domainTag)
-        assertTrue(greeting.text.contains("مساعد رقمي"))
-
-        val distress = IslamicAiModel.generateReply("أشعر بضيق وقلق", corpus)
-        assertEquals("مواساة ودعم إيماني", distress.domainTag)
-        assertTrue(distress.text.contains("اللهم إني أعوذ بك من الهم والحزن"))
-
-        val success = IslamicAiModel.generateReply("نجحت اليوم وأنا سعيد", corpus)
-        assertEquals("دردشة يومية ودية", success.domainTag)
-        assertTrue(success.text.contains("ما شاء الله"))
+    fun guardrailInterceptsSecularTaskAndApologizes() {
+        val rejected = IslamicAiModel.generateReply("اكتب كود بايثون لفرز مصفوفة ارقام", corpus)
+        assertEquals("اعتذار واقتصار شرعي", rejected.domainTag)
+        assertTrue(rejected.text.contains("أعتذر منك أخي الكريم، أنا مساعد إسلامي متخصص ومقتصر"))
+        assertTrue(rejected.text.contains("لا يمكنني الإجابة أو المساعدة في موضوعات خارج هذا النطاق"))
     }
 
     @Test
@@ -181,5 +161,47 @@ class IslamicAiModelTest {
         val cardReply = IslamicAiModel.generateReply("صمم لي بطاقة دعوية إسلامية عن يوم الجمعة", corpus)
         assertEquals(IslamicIntent.IMAGE_DESIGN.arabicLabel, cardReply.domainTag)
         assertTrue(cardReply.text.contains("تصميم البطاقة الدعوية الإسلامية"))
+    }
+
+    @Test
+    fun exactDreamSymbolMatchesAndNeverHallucinatesUnrelatedDreams() {
+        val slaughterDream = IslamicAiModel.generateReply("تفسير عن حلم ذبح", corpus)
+        assertEquals(IslamicIntent.DREAMS.arabicLabel, slaughterDream.domainTag)
+        assertTrue("Expected slaughter dream explanation, got: ${slaughterDream.text}", slaughterDream.text.contains("الذبح") || slaughterDream.text.contains("الأضحية"))
+        assertFalse("Must NEVER return unrelated flying dream!", slaughterDream.text.contains("الطيران"))
+
+        val greetingPlusDream = IslamicAiModel.generateReply("مرحبا فسر لي حلم ذبح", corpus)
+        assertEquals(IslamicIntent.DREAMS.arabicLabel, greetingPlusDream.domainTag)
+        assertTrue(greetingPlusDream.text.contains("الذبح"))
+        assertFalse(greetingPlusDream.text.contains("الطيران"))
+
+        val unknownDream = IslamicAiModel.generateReply("تفسير حلم كوكب المريخ والنيزك", corpus)
+        assertEquals(IslamicIntent.DREAMS.arabicLabel, unknownDream.domainTag)
+        assertFalse("Unmatched dream must NEVER return flying dream", unknownDream.text.contains("الطيران"))
+        assertTrue(unknownDream.text.contains("المريخ") || unknownDream.text.contains("النيزك") || unknownDream.text.contains("الضوابط"))
+    }
+
+    @Test
+    fun greetingAndCapabilityAndFriendlyDailyChatRespondAccurately() {
+        val hello = IslamicAiModel.generateReply("مرحبا", corpus)
+        assertEquals(IslamicIntent.GREETING.arabicLabel, hello.domainTag)
+        assertFalse(hello.text.contains("صلاة المسافر"))
+
+        val help = IslamicAiModel.generateReply("ماذا يمكنك ان تقدمه لي من مساعدة", corpus)
+        assertEquals(IslamicIntent.GREETING.arabicLabel, help.domainTag)
+        assertTrue(help.text.contains("الفتاوى") && help.text.contains("تفسير الرؤى"))
+        assertFalse(help.text.contains("صلاة المسافر"))
+
+        val boredChat = IslamicAiModel.generateReply("زهقان وطفشان وأبغى ندردش شوي", corpus)
+        assertEquals("دردشة أخوية يومية", boredChat.domainTag)
+        assertTrue(boredChat.text.contains("صاحبي") || boredChat.text.contains("ندردش"))
+
+        val workFatigue = IslamicAiModel.generateReply("اليوم تعبان من الشغل والدوام", corpus)
+        assertEquals("دردشة أخوية يومية", workFatigue.domainTag)
+        assertTrue(workFatigue.text.contains("الشغل") || workFatigue.text.contains("صديقي"))
+
+        val happyNews = IslamicAiModel.generateReply("الحمد لله نجحت في الاختبار وأبشرك", corpus)
+        assertEquals("دردشة أخوية يومية", happyNews.domainTag)
+        assertTrue(happyNews.text.contains("مبارك") || happyNews.text.contains("فرحت"))
     }
 }

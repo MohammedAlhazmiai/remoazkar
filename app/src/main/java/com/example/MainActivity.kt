@@ -120,6 +120,9 @@ class MainActivity : ComponentActivity() {
 
         preferencesManager = PreferencesManager(applicationContext)
 
+        // التقاط رمز App Check من نية التشغيل دون أي استدعاء لحزم Firebase عند الإقلاع
+        AppCheckInitializer.captureLaunchIntent(applicationContext, intent)
+
         // معالجة الدخول من اختصارات المشغّل (المسبحة العائمة / حاسبة العمر / الأذكار الصوتية)
         handleShortcutIntent(intent)
 
@@ -305,6 +308,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        AppCheckInitializer.captureLaunchIntent(applicationContext, intent)
         handleShortcutIntent(intent)
     }
 

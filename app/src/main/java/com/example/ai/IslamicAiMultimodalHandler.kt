@@ -6,7 +6,7 @@ import com.example.util.MediaExportHelper
 
 /**
  * معالج الوسائط والبطاقات الإسلامية التوليدية للمساعد الذكي.
- * يتيح تحليل الصور والتسجيلات الصوتية المرفوعة، وتوليد البطاقات الدعوية بحد يومي منضبط.
+ * يعمل في الوضع المحلي عند انقطاع الإنترنت أو عند طلب تصميم البطاقات الدعوية بحد يومي منضبط.
  */
 object IslamicAiMultimodalHandler {
 
@@ -62,7 +62,7 @@ object IslamicAiMultimodalHandler {
                     domainTag = IslamicIntent.IMAGE_DESIGN.arabicLabel,
                     detectedTopic = "اكتمال الحصة اليومية للبطاقات",
                     references = emptyList(),
-                    followUps = listOf("ما حكم سجود السهو؟", "اكتب لي خطبة جمعة", "فسر لي حلم المطر")
+                    followUps = listOf("ما حكم سجود السهو؟", "اكتب لي خطبة جمعة", "فسر لي حلم الذبح")
                 )
             }
 
@@ -109,32 +109,26 @@ object IslamicAiMultimodalHandler {
             "صورة مرفوعة من الهاتف"
         }
 
-        val subject = query.ifBlank { "استفسار ديني حول الصورة المرفوعة" }
-        val ranked = entries.firstOrNull { it.domain == "chat_qa" || it.domain == "fatwa" }
+        val matchedEntry = findBestEntryForQuery(query, entries)
         val text = buildString {
-            append("**قراءة وتحليل الصورة الدينية المرفوعة ($inspection):**\n\n")
-            if (query.isNotBlank()) {
-                append("بناءً على تساؤلك المرفق بالصورة: «$query»:\n\n")
+            append("**استلام الصورة المرفقة ($inspection) في الوضع غير المتصل بالإنترنت:**\n\n")
+            append("تم استلام ملف الصورة بنجاح. يتطلب الفهم البصري الدقيق لمحتوى الصورة وتفاصيلها اتصالًا بالإنترنت لتشغيل نموذج الرؤية السحابي (Gemini Vision)، أما أثناء العمل بدون إنترنت فإليك المساعدة المتاحة محليًا:\n\n")
+            if (matchedEntry != null) {
+                append("• **بناءً على سؤالك («$query») — ${matchedEntry.title}:**\n${matchedEntry.content}\n\n")
+                if (matchedEntry.quranEvidence.isNotBlank()) append("• **الدليل القرآني:** ${matchedEntry.quranEvidence}\n")
+                if (matchedEntry.hadithEvidence.isNotBlank()) append("• **الدليل النبوي:** ${matchedEntry.hadithEvidence}\n")
             } else {
-                append("قمت بالاطلاع على الصورة المرفوعة؛ والواجب في التعامل مع النصوص والوثائق الدينية والمصاحف هو التعظيم والتحري.\n\n")
+                append("• إذا كانت الصورة تحتوي على نص قرآني أو مسألة شرعية، اكتب فحوى ما فيها أو اتصل بالإنترنت وأعد إرسالها ليقرأها المساعد الذكي تلقائيًا بالكامل.\n")
+                append("• قال الله تعالى: ﴿ذَٰلِكَ وَمَن يُعَظِّمْ شَعَائِرَ اللَّهِ فَإِنَّهَا مِن تَقْوَى الْقُلُوبِ﴾ [الحج: 32].")
             }
-            if (ranked != null) {
-                append("• **البيان الشرعي:**\n${ranked.content.take(350)}\n\n")
-                if (ranked.quranEvidence.isNotBlank()) append("• **الدليل القرآني:** ${ranked.quranEvidence}\n")
-                if (ranked.hadithEvidence.isNotBlank()) append("• **الدليل النبوي:** ${ranked.hadithEvidence}\n")
-            } else {
-                append("• قال الله تعالى: ﴿ذَٰلِكَ وَمَن يُعَظِّمْ شَعَائِرَ اللَّهِ فَإِنَّهَا مِن تَقْوَى الْقُلُوبِ﴾ [الحج: 32].\n")
-                append("• وجاء في الحديث: «طلب العلم فريضة على كل مسلم».\n")
-            }
-            append("\nيمكنك كتابة أي سؤال فقهي أو شرعي محدد حول ما في الصورة وسأجيبك بدقة بالأدلة.")
-        }
+        }.trim()
 
         return IslamicAiResponse(
             text = text,
             domainTag = "قراءة صورة دينية",
-            detectedTopic = "تحليل صورة دينية",
-            references = listOf("الحج: 32", ranked?.title ?: "تعظيم شعائر الله"),
-            followUps = listOf("ما حكم هذا في الصلاة؟", "أعطني دليلًا إضافيًا", "احفظ الرد في الهاتف")
+            detectedTopic = matchedEntry?.title ?: "معالجة صورة مرفوعة (وضع محلي)",
+            references = listOfNotNull(matchedEntry?.title, "الحج: 32"),
+            followUps = listOf("اكتب نص المسألة الموجودة في الصورة", "صمم بطاقة دعوية إسلامية")
         )
     }
 
@@ -150,33 +144,42 @@ object IslamicAiMultimodalHandler {
             "تسجيل صوتي مرفوع من الهاتف"
         }
 
-        val subject = query.ifBlank { "سؤال واستفسار عبر تسجيل صوتي" }
-        val ranked = entries.firstOrNull { it.domain == "fatwa" || it.domain == "chat_qa" }
-
+        val matchedEntry = findBestEntryForQuery(query, entries)
         val text = buildString {
-            append("**استماع وتفحص التسجيل الصوتي ($inspection):**\n\n")
-            if (query.isNotBlank()) {
-                append("استمعت لمضمون طلبك الصوتي حول: «$query»:\n\n")
+            append("**استلام الملف الصوتي ($inspection) في الوضع غير المتصل بالإنترنت:**\n\n")
+            append("تم حفظ وقراءة بيانات الملف الصوتي بنجاح. يتطلب الاستماع الذكي لمحتوى التسجيل الصوتي وفهم التلاوة أو السؤال بالعامية داخل الملف اتصالًا بالإنترنت لتشغيل نموذج الصوت السحابي (Gemini Multimodal).\n\n")
+            if (matchedEntry != null) {
+                append("• **بناءً على النص المرافق («$query») — ${matchedEntry.title}:**\n${matchedEntry.content}\n\n")
+                if (matchedEntry.quranEvidence.isNotBlank()) append("• **الشاهد القرآني:** ${matchedEntry.quranEvidence}\n")
+                if (matchedEntry.hadithEvidence.isNotBlank()) append("• **الشاهد النبوي:** ${matchedEntry.hadithEvidence}\n")
             } else {
-                append("تم استلام المقطع الصوتي الديني بنجاح؛ وإليك التوجيه الشرعي المعتمد حول ما ورد فيه:\n\n")
+                append("• أثناء عدم توفر الإنترنت يمكنك الضغط على **زر المايك** للتحدث مباشرة وتحويل صوتك إلى نص فوري يفهمه المساعد المحلي فورًا، أو توصيل الإنترنت وإعادة إرسال التسجيل الصوتي.\n")
+                append("• قال الله تعالى: ﴿فَاسْأَلُوا أَهْلَ الذِّكْرِ إِن كُنتُمْ لَا تَعْلَمُونَ﴾ [النحل: 43].")
             }
-            if (ranked != null) {
-                append("• **التوجيه الشرعي:**\n${ranked.content.take(350)}\n\n")
-                if (ranked.quranEvidence.isNotBlank()) append("• **الشاهد القرآني:** ${ranked.quranEvidence}\n")
-                if (ranked.hadithEvidence.isNotBlank()) append("• **الشاهد النبوي:** ${ranked.hadithEvidence}\n")
-            } else {
-                append("• قال الله تعالى: ﴿فَاسْأَلُوا أَهْلَ الذِّكْرِ إِن كُنتُمْ لَا تَعْلَمُونَ﴾ [النحل: 43].\n")
-                append("• وقال النبي ﷺ: «من يرد الله به خيرًا يفقهه في الدين».\n")
-            }
-            append("\nتقبل الله طاعتكم، وبإمكانك حفظ الرد ومشاركته أو الاستماع إليه صوتيًا.")
-        }
+        }.trim()
 
         return IslamicAiResponse(
             text = text,
             domainTag = "تحليل مقطع صوتي",
-            detectedTopic = "توجيه شرعي لصوت مرفوع",
-            references = listOf("النحل: 43", ranked?.title ?: "الفقه في الدين"),
-            followUps = listOf("اختصر التوجيه في نقاط", "أعطني دليلًا إضافيًا", "احفظ الرد في الهاتف")
+            detectedTopic = matchedEntry?.title ?: "معالجة ملف صوتي (وضع محلي)",
+            references = listOfNotNull(matchedEntry?.title, "النحل: 43"),
+            followUps = listOf("اكتب خلاصة السؤال الصوتي نصيًا", "ما آداب تلاوة القرآن والاستماع إليه؟")
         )
+    }
+
+    private fun findBestEntryForQuery(query: String, entries: List<CorpusEntry>): CorpusEntry? {
+        if (query.isBlank() || isGenericMediaInquiry(query)) return null
+        val qIdx = ArabicNlpEngine.indexText(query)
+        val qVec = NeuralArabicLanguageCore.encodeFromIndexed(qIdx)
+        return entries.map { entry ->
+            entry to ArabicNlpEngine.scoreSemanticMatch(
+                queryIndexed = qIdx,
+                titleIndexed = entry.titleIndexed,
+                keywordsIndexed = entry.keywordsIndexed,
+                bodyIndexed = entry.bodyIndexed,
+                queryEmbedding = qVec,
+                entryEmbedding = entry.denseEmbedding
+            )
+        }.maxByOrNull { it.second }?.takeIf { it.second >= 5.5 }?.first
     }
 }

@@ -44,6 +44,21 @@ object ArabicNlpEngine {
         "حلمت", "رايت", "احلم", "منام", "البارحه", "شاهدت"
     )
 
+    /**
+     * جذور وصفية عامة لمجال الطلب (مثل: تفسير، حلم، حكم، فتوى، خطبة، مساعدة)
+     * لا تكفي وحدها لإثبات تطابق الموضوع إذا لم يتطابق المحتوى الفعلي للسؤال.
+     */
+    val DOMAIN_META_STEMS = setOf(
+        "تفسير", "فسر", "تعبير", "حلم", "احلام", "رويا", "روي", "منام",
+        "حكم", "احكام", "فتو", "فتوي", "فقه", "يجوز", "حلال", "حرام", "شرع", "شرعا",
+        "دليل", "ادله", "خطب", "خطبه", "رسال", "رساله", "خاطر", "خاطره",
+        "محاضر", "محاضره", "درس", "سوال", "استفسار", "موضوع", "مسال", "مساله",
+        "مساعد", "خدم", "مهام", "تقدم", "تستطيع", "تقدر", "كيفيه"
+    )
+
+    fun extractContentStems(indexed: IndexedText): Set<String> =
+        indexed.stems.filter { it !in DOMAIN_META_STEMS && it.length >= 2 }.toSet()
+
     fun normalize(input: String): String {
         var text = input.replace("\uFEFF", "")
         text = DIACRITICS.replace(text, "")
@@ -73,6 +88,7 @@ object ArabicNlpEngine {
             .replace(" شو حكم ", " ما حكم ")
             .replace(" وش تفسير ", " ما تفسير ")
             .replace(" ايش تفسير ", " ما تفسير ")
+            .replace(" شو تفسير ", " ما تفسير ")
             .replace(" حلمتلك ", " حلمت ")
             .replace(" شفت في المنام ", " رايت في المنام ")
             .replace(" تحلمت ", " حلمت ")
@@ -120,7 +136,7 @@ object ArabicNlpEngine {
         if (tokens.size <= 5 && GREETING_SIGNALS.any { norm == it || norm.startsWith("$it ") }) {
             val hasOtherIntent = listOf(
                 DREAM_SIGNALS, FATWA_SIGNALS, LETTER_SIGNALS, KHUTBAH_SIGNALS,
-                LECTURE_SIGNALS, KHATIRA_SIGNALS
+                LECTURE_SIGNALS, KHATIRA_SIGNALS, IMAGE_DESIGN_SIGNALS
             ).any { list -> list.any { norm.contains(it) } }
             if (!hasOtherIntent) return IslamicIntent.GREETING
         }
@@ -128,7 +144,7 @@ object ArabicNlpEngine {
         if (tokens.size <= 6 && APPRECIATION_SIGNALS.any { norm == it || norm.contains(it) }) {
             val hasActionIntent = listOf(
                 DREAM_SIGNALS, FATWA_SIGNALS, LETTER_SIGNALS, KHUTBAH_SIGNALS,
-                LECTURE_SIGNALS, KHATIRA_SIGNALS
+                LECTURE_SIGNALS, KHATIRA_SIGNALS, IMAGE_DESIGN_SIGNALS
             ).any { list -> list.any { norm.contains(it) } }
             if (!hasActionIntent) return IslamicIntent.APPRECIATION
         }
@@ -137,7 +153,7 @@ object ArabicNlpEngine {
             val isFollowUpPhrase = FOLLOW_UP_SIGNALS.any { norm.contains(it) } ||
                 ((norm.contains("اخر") || norm.contains("اخري") || norm.contains("اضافي")) &&
                     (norm.contains("دليل") || norm.contains("ايه") || norm.contains("حديث") || norm.contains("شاهد")))
-            val isExplicitNewDomain = norm.contains("حلمت") || norm.contains("ما حكم")
+            val isExplicitNewDomain = norm.contains("حلمت") || norm.contains("ما حكم") || norm.contains("تفسير حلم")
             if (isFollowUpPhrase && !isExplicitNewDomain) return IslamicIntent.FOLLOW_UP
         }
 
@@ -161,7 +177,6 @@ object ArabicNlpEngine {
             return IslamicIntent.FOLLOW_UP
         }
 
-        // Fallback إلى التصنيف العصبي بالمتجهات الكثيفة عند عدم وجود كلمات مفتاحية صريحة
         val isQuestionForm = norm.startsWith("هل ") || norm.startsWith("ما ") || norm.startsWith("كم ") ||
             norm.startsWith("متي ") || norm.startsWith("كيف ") || norm.startsWith("لماذا ")
         val neuralProbs = NeuralArabicLanguageCore.classifyIntentDistribution(query)
@@ -201,18 +216,45 @@ object ArabicNlpEngine {
     ): Double {
         if (queryIndexed.stems.isEmpty() && queryIndexed.normalized.isBlank()) return 0.0
 
+        val contentStems = extractContentStems(queryIndexed)
+        val requireContentHit = contentStems.isNotEmpty()
+        var contentHitCount = 0
         var score = 0.0
 
-        // Whole phrase substring match against title or keywords
-        if (queryIndexed.normalized.length >= 4) {
-            if (titleIndexed.normalized.contains(queryIndexed.normalized)) score += 14.0
-            if (keywordsIndexed.normalized.contains(queryIndexed.normalized)) score += 12.0
+        // Whole phrase substring match against title or keywords (only meaningful if query has content)
+        if (queryIndexed.normalized.length >= 4 && (!requireContentHit || queryIndexed.tokens.size >= 2)) {
+            if (titleIndexed.normalized.contains(queryIndexed.normalized)) {
+                score += 14.0
+                contentHitCount++
+            }
+            if (keywordsIndexed.normalized.contains(queryIndexed.normalized)) {
+                score += 12.0
+                contentHitCount++
+            }
         }
 
         for (stem in queryIndexed.stems) {
-            if (stem in keywordsIndexed.stems) score += 6.5
-            if (stem in titleIndexed.stems) score += 5.5
-            if (stem in bodyIndexed.stems) score += 2.0
+            val isMeta = stem in DOMAIN_META_STEMS
+            val kwWeight = if (isMeta) 0.1 else 7.0
+            val titleWeight = if (isMeta) 0.1 else 6.0
+            val bodyWeight = if (isMeta) 0.05 else 2.2
+
+            var hit = false
+            if (stem in keywordsIndexed.stems) {
+                score += kwWeight
+                hit = true
+            }
+            if (stem in titleIndexed.stems) {
+                score += titleWeight
+                hit = true
+            }
+            if (stem in bodyIndexed.stems) {
+                score += bodyWeight
+                hit = true
+            }
+            if (hit && !isMeta) {
+                contentHitCount++
+            }
         }
 
         for (rawToken in queryIndexed.tokens) {
@@ -221,35 +263,64 @@ object ArabicNlpEngine {
             } else {
                 rawToken
             }
-            if (token.length >= 3) {
-                if (" ${keywordsIndexed.normalized} ".contains(" $token ")) score += 4.5
-                if (" ${titleIndexed.normalized} ".contains(" $token ")) score += 3.5
-                if (" ${bodyIndexed.normalized} ".contains(" $token ")) score += 1.2
+            if (token.length >= 3 && lightStem(token) !in DOMAIN_META_STEMS) {
+                var tokenHit = false
+                if (" ${keywordsIndexed.normalized} ".contains(" $token ")) {
+                    score += 4.5
+                    tokenHit = true
+                }
+                if (" ${titleIndexed.normalized} ".contains(" $token ")) {
+                    score += 3.5
+                    tokenHit = true
+                }
+                if (" ${bodyIndexed.normalized} ".contains(" $token ")) {
+                    score += 1.2
+                    tokenHit = true
+                }
+                if (tokenHit) contentHitCount++
             }
         }
 
-        // Bigram match bonus for multi-word terms like "سجود السهو" or "كفاره اليمين"
+        // Bigram match bonus for multi-word terms (only count if at least one word isn't generic meta)
         if (queryIndexed.tokens.size >= 2) {
             for (i in 0 until queryIndexed.tokens.lastIndex) {
-                val bigram = "${queryIndexed.tokens[i]} ${queryIndexed.tokens[i + 1]}"
-                if (keywordsIndexed.normalized.contains(bigram)) score += 9.0
-                if (titleIndexed.normalized.contains(bigram)) score += 8.0
-                if (bodyIndexed.normalized.contains(bigram)) score += 3.0
+                val w1 = queryIndexed.tokens[i]
+                val w2 = queryIndexed.tokens[i + 1]
+                if (lightStem(w1) in DOMAIN_META_STEMS && lightStem(w2) in DOMAIN_META_STEMS) continue
+                val bigram = "$w1 $w2"
+                var biHit = false
+                if (keywordsIndexed.normalized.contains(bigram)) {
+                    score += 9.0
+                    biHit = true
+                }
+                if (titleIndexed.normalized.contains(bigram)) {
+                    score += 8.0
+                    biHit = true
+                }
+                if (bodyIndexed.normalized.contains(bigram)) {
+                    score += 3.0
+                    biHit = true
+                }
+                if (biHit) contentHitCount++
             }
         }
 
-        // Hybrid Dense Neural Cosine Reranking (handles Arabic spelling variants & paraphrases)
+        // منع التطابق الكاذب تمامًا: إذا حوى السؤال موضوعًا محددًا ولم يتطابق أي جذر فعلي منه، نُعيد 0.0 فورًا
+        if (requireContentHit && contentHitCount == 0) {
+            return 0.0
+        }
+
+        // Hybrid Dense Neural Cosine Reranking (يُضاف فقط بعد التأكد من صلة المحتوى)
         if (queryEmbedding != null && entryEmbedding != null && entryEmbedding.isNotEmpty()) {
             val neuralCosine = NeuralArabicLanguageCore.cosineSimilarity(queryEmbedding, entryEmbedding)
-            if (neuralCosine >= 0.16 && (score > 0.0 || neuralCosine >= 0.30)) {
-                score += neuralCosine * 12.0
+            if (neuralCosine >= 0.16 && (contentHitCount > 0 || (!requireContentHit && neuralCosine >= 0.35))) {
+                score += neuralCosine * 10.0
             }
         }
 
         if (score <= 0.0) return 0.0
         score += domainAffinity
 
-        // Gentle normalization so super-short noise doesn't over-rank
         val denom = 1.0 + 0.08 * kotlin.math.sqrt(bodyIndexed.stems.size.toDouble())
         return score / denom
     }

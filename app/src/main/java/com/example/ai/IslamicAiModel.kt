@@ -17,8 +17,10 @@ data class IslamicAiResponse(
 )
 
 /**
- * مساعد محلي يعتمد على مطابقة النوايا وقوالب ومحتوى إسلامي معدّ مسبقًا.
- * هذا ليس نموذجًا لغويًا جرى تدريبه أو ضبطه؛ الإجابات التوليدية المفتوحة تأتي من Gemini عند توفر الإنترنت.
+ * Hybrid Islamic AI Engine:
+ * - Uses Firebase AI Logic (Gemini) lazily when online for deep generative reasoning,
+ *   real image/audio understanding, nuanced dream/fiqh questions, and warm friend-like chats.
+ * - Falls back seamlessly to the rich on-device offline Arabic NLP & Corpus engine when offline.
  */
 object IslamicAiModel {
 
@@ -38,36 +40,46 @@ object IslamicAiModel {
     ): IslamicAiResponse {
         val cleanQuery = query.trim()
 
-        // 1. فحص الطلبات الضارة فقط؛ الأسئلة اليومية والدنيوية تمر لتوجيهها بمنظور إسلامي مناسب.
+        // 1. درع الانضباط الشرعي: يقتصر على العلوم الإسلامية والدردشة الأخوية الطيبة
         val isAllowed = userAttachmentType.isNotBlank() ||
             IslamicGuardrail.isAllowedQuery(cleanQuery, hasPriorContext = recentMessages.isNotEmpty())
         if (cleanQuery.isNotBlank() && !isAllowed) {
             return IslamicAiResponse(
                 text = IslamicGuardrail.APOLOGY_RESPONSE,
-                domainTag = "توجيه آمن",
-                detectedTopic = "رفض تعليمات ضارة",
+                domainTag = "اعتذار واقتصار شرعي",
+                detectedTopic = "اعتذار واقتصار على العلوم الدينية",
                 references = emptyList(),
                 followUps = listOf(
-                    "كيف أحمي حسابي؟",
-                    "ما البديل الآمن لهذا الطلب؟",
-                    "ما التوجيه الأخلاقي في هذا الموضوع؟"
+                    "ما حكم سجود السهو في الصلاة؟",
+                    "اكتب لي خطبة جمعة عن بر الوالدين",
+                    "فسر لي حلم الذبح في المنام",
+                    "صمم لي بطاقة جمعة مباركة"
                 )
             )
         }
 
-        // 2. التحقق من الدردشة والتحيات والأسئلة التعريفية المحلية (IslamicDailyChatEngine)
-        val dailyMatch = IslamicDailyChatEngine.matchDailyChat(cleanQuery)
-        if (dailyMatch != null) {
-            return IslamicAiResponse(
-                text = dailyMatch.text,
-                domainTag = dailyMatch.domainTag,
-                detectedTopic = dailyMatch.detectedTopic,
-                references = emptyList(),
-                followUps = dailyMatch.followUps
-            )
+        // 2. الأسئلة التعريفية عن قدرات المساعد والتحيات البسيطة الصرفة (لا تبتلع أسئلة الأحلام أو الفتاوى أبدًا)
+        if (userAttachmentType.isBlank() && cleanQuery.isNotBlank()) {
+            val quickMatch = IslamicDailyChatEngine.matchCapabilityOrQuickGreeting(cleanQuery)
+            if (quickMatch != null) {
+                return IslamicAiResponse(
+                    text = quickMatch.text,
+                    domainTag = quickMatch.domainTag,
+                    detectedTopic = quickMatch.detectedTopic,
+                    references = emptyList(),
+                    followUps = quickMatch.followUps
+                )
+            }
         }
 
-        // 3. محاولة الاستعلام من نموذج الذكاء الاصطناعي التوليدي السحابي (Firebase AI Logic / Gemini 3.5 Flash Lite)
+        // 3. طلبات تصميم البطاقات المحلية المخصصة (تُنشأ كصورة داخل الهاتف بحد يومي منضبط)
+        if (userAttachmentType.isBlank() && cleanQuery.isNotBlank() &&
+            ArabicNlpEngine.detectIntent(cleanQuery, hasPriorContext = false) == IslamicIntent.IMAGE_DESIGN
+        ) {
+            return IslamicAiMultimodalHandler.composeImageDesignReply(cleanQuery, context, entries)
+        }
+
+        // 4. الاستعلام التوليدي السحابي المتقدم عبر Firebase AI Logic (Gemini) عند توفر الإنترنت
         if (context != null && (cleanQuery.isNotBlank() || userAttachmentType.isNotBlank())) {
             val generativeText = runCatching {
                 kotlinx.coroutines.runBlocking {
@@ -82,51 +94,51 @@ object IslamicAiModel {
             }.getOrNull()
 
             if (!generativeText.isNullOrBlank()) {
+                val norm = ArabicNlpEngine.normalize(cleanQuery)
                 val domainTag = when {
                     userAttachmentType == "image" -> "تحليل بصري ذكي"
                     userAttachmentType == "audio" -> "تحليل صوتي ذكي"
-                    cleanQuery.contains("حلم") || cleanQuery.contains("رؤيا") -> "تفسير الرؤى والأحلام"
-                    cleanQuery.contains("حكم") || cleanQuery.contains("يجوز") -> "فتوى ومسألة فقهية"
-                    cleanQuery.contains("خطبة") || cleanQuery.contains("محاضرة") -> "خطبة ومحاضرة إيمانية"
-                    else -> "دردشة واستدلال ذكي"
+                    norm.contains("حلم") || norm.contains("رويا") || norm.contains("منام") -> IslamicIntent.DREAMS.arabicLabel
+                    norm.contains("حكم") || norm.contains("يجوز") || norm.contains("فتو") -> IslamicIntent.FATWA.arabicLabel
+                    norm.contains("خطب") -> IslamicIntent.KHUTBAH.arabicLabel
+                    norm.contains("محاضر") -> IslamicIntent.LECTURE.arabicLabel
+                    norm.contains("رسال") -> IslamicIntent.LETTER.arabicLabel
+                    norm.contains("خاطر") -> IslamicIntent.KHATIRA.arabicLabel
+                    else -> "حوار واستدلال ذكي"
                 }
                 return IslamicAiResponse(
                     text = generativeText,
                     domainTag = domainTag,
-                    detectedTopic = "توليد ذكي متقدم عبر Gemini",
-                    references = emptyList(),
+                    detectedTopic = cleanQuery.take(40).ifBlank { domainTag },
+                    references = if (userAttachmentType.isNotBlank() || domainTag != "حوار واستدلال ذكي") {
+                        listOf("القرآن الكريم", "السنة النبوية الشريفة")
+                    } else {
+                        emptyList()
+                    },
                     followUps = listOf(
-                        "أعطني نصيحة عملية أخرى",
-                        "كيف أتعامل مع الأمر بهدوء؟",
-                        "ما القيمة الإسلامية المرتبطة بهذا الموضوع؟"
-                    ),
-                    attachmentType = if (userAttachmentType == "image") "card" else "",
-                    attachmentUri = if (userAttachmentType == "image" && generativeText.length > 50 && context != null) {
-                        IslamicCardGenerator.generateCard(
-                            context = context,
-                            request = IslamicCardRequest(
-                                categoryTitle = domainTag,
-                                mainText = generativeText.take(180),
-                                referenceText = "توليد ذكي عبر Gemini"
-                            )
-                        ).absolutePath
-                    } else ""
+                        "وضّح لي أكثر",
+                        "أعطني دليلاً من القرآن والسنة",
+                        "اختصر لي الفكرة في نقاط"
+                    )
                 )
             }
         }
 
-        // عند انقطاع الشبكة لا نعرض فتوى عشوائية لسؤال يومي أو دنيوي؛ نوضح حدود المعرفة ونجيب بإطار إسلامي عام.
-        IslamicDailyChatEngine.offlineFallback(cleanQuery)?.let { dailyReply ->
-            return IslamicAiResponse(
-                text = dailyReply.text,
-                domainTag = dailyReply.domainTag,
-                detectedTopic = dailyReply.detectedTopic,
-                references = emptyList(),
-                followUps = dailyReply.followUps
-            )
+        // 5. الدردشة اليومية الودية المحلية عند العمل بدون إنترنت
+        if (userAttachmentType.isBlank() && cleanQuery.isNotBlank()) {
+            val dailyOfflineMatch = IslamicDailyChatEngine.matchDailyChat(cleanQuery)
+            if (dailyOfflineMatch != null) {
+                return IslamicAiResponse(
+                    text = dailyOfflineMatch.text,
+                    domainTag = dailyOfflineMatch.domainTag,
+                    detectedTopic = dailyOfflineMatch.detectedTopic,
+                    references = emptyList(),
+                    followUps = dailyOfflineMatch.followUps
+                )
+            }
         }
 
-        // 4. معالجة الصور والتسجيلات المرفوعة محلياً (Fallback)
+        // 6. معالجة الصور والتسجيلات المرفوعة محليًا (Offline Fallback)
         if (userAttachmentType == "image" && (cleanQuery.isBlank() || IslamicAiMultimodalHandler.isGenericMediaInquiry(cleanQuery))) {
             return IslamicAiMultimodalHandler.composeImageAnalysisReply(cleanQuery, userAttachmentUri, context, entries)
         }
@@ -160,26 +172,27 @@ object IslamicAiModel {
     }
 
     private fun greetingResponse(): IslamicAiResponse = IslamicAiResponse(
-        text = "وعليكم السلام ورحمة الله وبركاته، أهلًا بك يا صديقي. أنا مساعد رقمي، ولست إنسانًا؛ يسعدني أن أتحدث معك بودّ وأقدم توجيهًا إسلاميًا نافعًا في الحديث اليومي وشؤون الحياة والأسئلة الشرعية.\n\n" +
-            "تتوفر بعض الردود والمعلومات محليًا دون إنترنت، أما الإجابات المفتوحة الأكثر تفصيلًا فتستفيد من Gemini عند توفر الاتصال. المحرك المحلي يستخدم محتوى وقواعد معدّة مسبقًا، وليس نموذجًا جرى تدريبه على المحادثات.\n\n" +
-            "يمكنك التحدث معي عن يومك أو سؤالي عن:\n" +
-            "• **الفتاوى والمسائل الفقهية:** الطهارة، الصلاة، الصيام ومفطراته، الزكاة، المعاملات، الأيمان، الأسرة، مع الأدلة من القرآن والسنة.\n" +
-            "• **تفسير الأحلام والرسائل والخواطر والخطب**، مع مراعاة حدود المعرفة وعدم الجزم بالغيب.\n\n" +
-            "اكتب سؤالك أو أخبرني ما الذي يشغل بالك.",
+        text = "وعليكم السلام ورحمة الله وبركاته، أهلاً ومرحباً بك أخي الكريم في **المساعد الإسلامي الذكي** (يعمل محليًا بدون إنترنت وسحابيًا بالذكاء التوليدي عند الاتصال).\n\n" +
+            "يسعدني ويشرفني خدمتك بأسلوب واضح ومتزن في المجالات التالية:\n" +
+            "• **الفتاوى والمسائل الفقهية:** الطهارة، الصلاة، الصيام ومفطراته، الزكاة، المعاملات، الأيمان، الأسرة، مع الأدلة.\n" +
+            "• **تفسير الأحلام وتعبير الرؤى:** وفق قواعد ابن سيرين والنابلسي والضوابط الشرعية.\n" +
+            "• **الدردشة الأخوية اليومية:** التحدث معك كصديق في مواقف اليوم والنصح المريح للقلب.\n" +
+            "• **الرسائل الدينية والخواطر والخطب والمحاضرات.**\n\n" +
+            "تفضل بكتابة سؤالك أو طلبك الآن.",
         domainTag = IslamicIntent.GREETING.arabicLabel,
         detectedTopic = "الترحيب والتعريف",
         references = emptyList(),
         followUps = listOf(
+            "فسر لي حلم الذبح في المنام",
             "ما حكم بخاخ الربو وقطرة العين في الصيام؟",
-            "فسر لي حلم المطر والبحر في المنام",
             "اكتب لي خطبة جمعة عن تقوى الله",
-            "اكتب رسالة دينية للتهنئة بالعيد"
+            "اليوم تعبان وأبغى ندردش"
         )
     )
 
     private fun appreciationResponse(): IslamicAiResponse = IslamicAiResponse(
         text = "وجزاك الله خيرًا وبارك فيك وفي أهلك ووقتك أخي الكريم، شكرًا لطيب كلماتك ودعائك.\n\n" +
-            "أنا في خدمتك دائمًا لصياغة الرسائل الدينية والخواطر والخطب والمحاضرات، أو الإجابة على المسائل الفقهية وتفسير الرؤى بالأدلة الشرعية.\n" +
+            "أنا في خدمتك دائمًا لصياغة الرسائل الدينية والخواطر والخطب والمحاضرات، أو الإجابة على المسائل الفقهية وتفسير الرؤى والدردشة الأخوية.\n" +
             "تقبل الله منا ومنكم صالح الأعمال، وأسعدك في الدارين.",
         domainTag = IslamicIntent.APPRECIATION.arabicLabel,
         detectedTopic = "دعاء وشكر متبادل",
@@ -221,7 +234,7 @@ object IslamicAiModel {
                     hadith.forEach { append("• «${it.text}» — ${it.source}\n") }
                 }
                 if (quran.isEmpty() && hadith.isEmpty()) {
-                    val top = rankEntries(priorTopic, entries, targetDomain = null).firstOrNull()?.first
+                    val top = rankEntries(priorTopic, entries, targetDomain = null).firstOrNull()?.takeIf { it.second >= 4.5 }?.first
                     if (top != null) {
                         if (top.quranEvidence.isNotBlank()) append("\n• **الدليل القرآني:** ${top.quranEvidence}\n")
                         if (top.hadithEvidence.isNotBlank()) append("• **الدليل النبوي:** ${top.hadithEvidence}\n")
@@ -270,7 +283,6 @@ object IslamicAiModel {
             )
         }
 
-        // Re-evaluate full intent on merged context
         val combinedIntent = ArabicNlpEngine.detectIntent(combinedTopicQuery, hasPriorContext = false)
         return when (combinedIntent) {
             IslamicIntent.DREAMS -> composeDreamReply(combinedTopicQuery, entries)
@@ -286,12 +298,13 @@ object IslamicAiModel {
     private fun composeDreamReply(query: String, entries: List<CorpusEntry>): IslamicAiResponse {
         val dreamEntries = entries.filter { it.domain == "dreams" }
         val ranked = rankEntries(query, dreamEntries, targetDomain = null)
-            .filter { it.second >= 4.0 }
+            .filter { it.second >= 4.5 }
         val rulesEntry = dreamEntries.firstOrNull { it.id == "dream_rules_etiquette" }
 
-        // Gather up to 4 matched symbols (excluding general rules entry unless it's the only one)
+        // تجميع الرموز المتطابقة فعلًا فقط (دون الخلط برموز لم يذكرها المستخدم)
         val symbols = ranked.map { it.first }.filter { it.id != "dream_rules_etiquette" }.take(4)
         val norm = ArabicNlpEngine.normalize(query)
+        val requestedDreamSubject = extractDreamSubject(query)
 
         val text = buildString {
             append("**تفسير الرؤيا وضوابطها الشرعية (وفق منهج ابن سيرين والنابلسي):**\n\n")
@@ -304,14 +317,20 @@ object IslamicAiModel {
                     append("\n**توجيه نبوي عند القلق أو الكابوس:**\n")
                     append("إذا صاحَبَ المنام فزعٌ أو كدر فكثيرًا ما يكون من حديث النفس أو تهويل الشيطان؛ فاستعذ بالله ثلاثًا، وانفث عن يسارك ثلاثًا، ولا تحدّث بها أحدًا، ولن تضرك بإذن الله.\n")
                 }
-            } else if (rulesEntry != null) {
-                append(rulesEntry.content)
-                append("\n\n**نصيحة:** اذكر أبرز الرموز التي رأيتها (مثل: المطر، البحر، الميت، الصلاة، الكعبة، السفر، الذهب، البيت، الأسنان...) لأستخرج لك دلالتها بدقة.")
+            } else {
+                if (requestedDreamSubject.isNotBlank()) {
+                    append("بخصوص سؤالك عن تفسير: **«$requestedDreamSubject»** في المنام:\n")
+                    append("لم يرد نصٌّ تفصيلي مطابق تمامًا لهذا الرمز في القاموس المحلي غير المتصل بالإنترنت، ومن الأمانة ألا نبدّله برمزٍ آخر لم تره.\n\n")
+                }
+                if (rulesEntry != null) {
+                    append(rulesEntry.content)
+                    append("\n\n**كيف تحصل على أدق تعبير:**\nاذكر تفاصيل أكثر حول ما رأيت (المكان، الأشخاص، شعورك أثناء المنام)، أو اتصل بالإنترنت ليحلّل نموذج الذكاء التوليدي الرمز وسياقه كاملًا بدقة.")
+                }
             }
 
             val primaryRef = symbols.firstOrNull() ?: rulesEntry
             if (primaryRef != null) {
-                append("\n**الشواهد الشرعية:**\n")
+                append("\n\n**الشواهد الشرعية:**\n")
                 if (primaryRef.quranEvidence.isNotBlank()) append("• ${primaryRef.quranEvidence}\n")
                 if (primaryRef.hadithEvidence.isNotBlank()) append("• ${primaryRef.hadithEvidence}\n")
             }
@@ -326,10 +345,20 @@ object IslamicAiModel {
         return IslamicAiResponse(
             text = text,
             domainTag = IslamicIntent.DREAMS.arabicLabel,
-            detectedTopic = symbols.firstOrNull()?.title ?: "تعبير الرؤى",
+            detectedTopic = symbols.firstOrNull()?.title ?: requestedDreamSubject.ifBlank { "تعبير الرؤى" },
             references = refs,
             followUps = symbols.firstOrNull()?.followUps ?: rulesEntry?.followUps.orEmpty()
         )
+    }
+
+    private fun extractDreamSubject(query: String): String {
+        val cleaned = query.trim()
+            .replace(Regex("^(فسر لي|فسرلي|ما تفسير|تفسير|تعبير|حلمت بـ|حلمت ب|حلمت أني|حلمت اني|حلمت|رأيت في المنام|رايت في المنام|رأيت|حلم|رؤيا)\\s*"), "")
+            .replace(Regex("^(عن|في|من|حلم|رؤيا|منام)\\s+"), "")
+            .replace("في المنام", "")
+            .replace("في الحلم", "")
+            .trim()
+        return if (cleaned.length >= 2) cleaned else ""
     }
 
     private fun composeCreativeReply(
@@ -398,7 +427,7 @@ object IslamicAiModel {
                     append("\n**فائدة فقهية:** ${top.scholarlyNote}")
                 }
             } else if (liveQuran.isNotEmpty() || liveHadith.isNotEmpty()) {
-                append("استنادًا إلى النصوص الشرعية الموثّقة المحفوظة داخل التطبيق حول موضوع استفسارك:\n")
+                append("استنادًا إلى النصوص الشرعية الموثّقة المحفوظة داخل التطبيق حول موضوع استفسارك («$query»):\n")
                 if (liveQuran.isNotEmpty()) {
                     append("\n**من كتاب الله تعالى:**\n")
                     liveQuran.forEach { append("• ${it.text} [${it.source}]\n") }
@@ -407,10 +436,10 @@ object IslamicAiModel {
                     append("\n**من السنة والأذكار المأثورة:**\n")
                     liveHadith.forEach { append("• «${it.text}» — ${it.source}\n") }
                 }
-                append("\n*تنبيه: في المسائل الشخصية والفتاوى التفصيلية الدقيقة يُنصح باستشارة أهل العلم الموثوقين بعد بيان كامل تفاصيل الحالة.*")
+                append("\n*تنبيه: في المسائل الشخصية والفتاوى التفصيلية الدقيقة يُنصح باستشارة أهل العلم الموثوقين أو الاتصال بالإنترنت لتفعيل التحليل السحابي الكامل.*")
             } else {
-                append("لم أجد مسألة مطابقة تمامًا لهذا اللفظ في قاعدة الفتاوى المحلية حتى لا أفتي بغير علم، فالأمانة العلمية تقتضي التثبت.\n\n")
-                append("يمكنك إعادة صياغة السؤال بكلمات أوضح (مثل: حكم سجود السهو، بخاخ الربو للصائم، زكاة المال، كفارة اليمين، تفسير حلم...) أو طلب خطبة/رسالة/خاطرة في أي موضوع.")
+                append("لم أجد مسألة مطابقة تمامًا لسؤالك: **«$query»** في قاعدة الفتاوى المحلية حتى لا أفتي بغير علم، فالأمانة العلمية تقتضي التثبت.\n\n")
+                append("يمكنك إعادة صياغة السؤال بكلمات أوضح (مثل: حكم سجود السهو، بخاخ الربو للصائم، زكاة المال، كفارة اليمين، تفسير حلم...)، أو تفعيل الاتصال بالإنترنت ليحلّل الذكاء التوليدي استفسارك بتفصيل وعمق.")
             }
         }.trim()
 
@@ -424,7 +453,7 @@ object IslamicAiModel {
 
         return IslamicAiResponse(
             text = text,
-            domainTag = top?.let { domainArabicLabel(it.domain) } ?: intent.arabicLabel,
+            domainTag = top?.takeIf { topScore >= 5.5 }?.let { domainArabicLabel(it.domain) } ?: intent.arabicLabel,
             detectedTopic = top?.takeIf { topScore >= 5.5 }?.title ?: extractRequestedTopic(query),
             references = refs,
             followUps = top?.takeIf { topScore >= 5.5 }?.followUps?.takeIf { it.isNotEmpty() }
@@ -541,9 +570,9 @@ object IslamicAiModel {
 
     private fun needsCustomTopicSynthesis(query: String, entry: CorpusEntry): Boolean {
         val queryIdx = ArabicNlpEngine.indexText(query)
-        val overlap = queryIdx.stems.count { it in entry.keywordsIndexed.stems || it in entry.titleIndexed.stems }
-        // Only generic format keyword ("خطبه", "رساله", "خاطره", "محاضره") matched without matching the entry's subject
-        return overlap <= 1 && queryIdx.stems.size >= 3
+        val overlap = ArabicNlpEngine.extractContentStems(queryIdx)
+            .count { it in entry.keywordsIndexed.stems || it in entry.titleIndexed.stems }
+        return overlap == 0 && ArabicNlpEngine.extractContentStems(queryIdx).isNotEmpty()
     }
 
     private fun extractRequestedTopic(query: String): String {

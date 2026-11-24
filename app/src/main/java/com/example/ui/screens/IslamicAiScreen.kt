@@ -218,7 +218,7 @@ fun IslamicAiScreen(
                         Column {
                             Text("المساعد الإسلامي الذكي", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                             Text(
-                                "مقتصر على العلوم الدينية • محلي بدون إنترنت",
+                                "مقتصر على العلوم الدينية • ذكاء سحابي ومحلي بدون إنترنت",
                                 fontSize = 11.sp,
                                 color = Color(0xFFD9EBDF)
                             )
@@ -346,7 +346,7 @@ fun IslamicAiScreen(
                                                 modifier = Modifier.size(16.dp),
                                                 strokeWidth = 2.dp
                                             )
-                                            Text("جارٍ الاستدلال والصياغة محليًا...", fontSize = 12.sp)
+                                            Text("جارٍ الفهم والصياغة...", fontSize = 12.sp)
                                         }
                                     }
                                 }

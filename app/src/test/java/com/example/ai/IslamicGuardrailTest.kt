@@ -16,15 +16,9 @@ class IslamicGuardrailTest {
         assertTrue(IslamicGuardrail.isAllowedQuery("اكتب خاطرة إيمانية عن التوكل واليقين بالله"))
         assertTrue(IslamicGuardrail.isAllowedQuery("السلام عليكم ورحمة الله وبركاته"))
         assertTrue(IslamicGuardrail.isAllowedQuery("جزاك الله خيرًا وبارك فيك"))
-    }
-
-    @Test
-    fun dailyFriendChatAndWorldlyRequestsAreAllowedForIslamicGuidance() {
-        assertTrue(IslamicGuardrail.isAllowedQuery("كيف حالك؟"))
-        assertTrue(IslamicGuardrail.isAllowedQuery("صباح الخير"))
-        assertTrue(IslamicGuardrail.isAllowedQuery("أشعر بضيق وقلق"))
-        assertTrue(IslamicGuardrail.isAllowedQuery("نجحت في الاختبار وأنا سعيد"))
-        assertTrue(IslamicGuardrail.isAllowedQuery("أحتاج مساعدة في كتابة كود بايثون"))
+        assertTrue(IslamicGuardrail.isAllowedQuery("اليوم تعبان في العمل وودي نسولف شوي"))
+        assertTrue(IslamicGuardrail.isAllowedQuery("ماذا يمكنك ان تقدمه لي من مساعدة"))
+        assertTrue(IslamicGuardrail.isAllowedQuery("زهقان وطفشان كيف حالك يا صديقي"))
     }
 
     @Test
@@ -35,15 +29,10 @@ class IslamicGuardrailTest {
     }
 
     @Test
-    fun dailyWorldlyQueriesAreAllowedForAnIslamicPerspective() {
-        assertTrue(IslamicGuardrail.isAllowedQuery("اكتب كود بايثون لفرز مصفوفة برمجية"))
-        assertTrue(IslamicGuardrail.isAllowedQuery("من هو افضل لاعب في دوري ابطال اوروبا ميسي ام رونالدو"))
-        assertTrue(IslamicGuardrail.isAllowedQuery("ما هي احدث اخبار فيلم هوليوود ومسلسل نتفلكس"))
-    }
-
-    @Test
-    fun harmfulActionRequestsAreStillBlocked() {
+    fun secularNonReligiousQueriesArePolitelyRejected() {
+        assertFalse(IslamicGuardrail.isAllowedQuery("اكتب كود بايثون لفرز مصفوفة برمجية"))
+        assertFalse(IslamicGuardrail.isAllowedQuery("من هو افضل لاعب في دوري ابطال اوروبا ميسي ام رونالدو"))
+        assertFalse(IslamicGuardrail.isAllowedQuery("ما هي احدث اخبار فيلم هوليوود ومسلسل نتفلكس"))
         assertFalse(IslamicGuardrail.isAllowedQuery("كيف اخترق شبكة واي فاي او اهكر حساب"))
-        assertTrue(IslamicGuardrail.isAllowedQuery("كيف احمي حسابي من الاختراق؟"))
     }
 }
