@@ -20,14 +20,18 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -78,6 +82,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -169,7 +174,9 @@ fun IslamicAiScreen(
 
     LaunchedEffect(state.messages.size) {
         if (state.messages.isNotEmpty()) {
-            listState.animateScrollToItem(state.messages.lastIndex)
+            runCatching {
+                listState.animateScrollToItem(state.messages.lastIndex)
+            }
         }
     }
 
@@ -263,7 +270,6 @@ fun IslamicAiScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .imePadding()
             ) {
                 if (state.messages.isEmpty()) {
                     AiEmptyStateView(
@@ -364,7 +370,11 @@ fun IslamicAiScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .navigationBarsPadding()
+                            .windowInsetsPadding(
+                                WindowInsets.navigationBars
+                                    .union(WindowInsets.ime)
+                                    .only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)
+                            )
                     ) {
                         if (pendingAttachmentUri != null) {
                             SelectedAttachmentChip(
@@ -423,7 +433,10 @@ fun IslamicAiScreen(
                                 placeholder = { Text("اكتب أو تحدث بالمايك...") },
                                 maxLines = 4,
                                 shape = RoundedCornerShape(18.dp),
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Text,
+                                    imeAction = ImeAction.Send
+                                ),
                                 keyboardActions = KeyboardActions(onSend = { submitCurrent() })
                             )
                             Spacer(Modifier.width(6.dp))

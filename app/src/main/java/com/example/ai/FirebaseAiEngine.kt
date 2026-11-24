@@ -15,6 +15,7 @@ import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.Content
 import com.google.firebase.ai.type.content
 import com.google.firebase.ai.type.generationConfig
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeout
 import java.io.InputStream
 
@@ -84,13 +85,20 @@ object FirebaseAiEngine {
     ): String? {
         if (context == null || !isNetworkAvailable(context)) return null
 
-        AppCheckInitializer.ensureConfigured(context.applicationContext)
+        return try {
+            AppCheckInitializer.ensureConfigured(context.applicationContext)
 
-        val userContent = buildUserContent(context, query, attachmentType, attachmentUri) ?: return null
-        val history = buildChatHistory(recentMessages)
+            val userContent = buildUserContent(context, query, attachmentType, attachmentUri) ?: return null
+            val history = buildChatHistory(recentMessages)
 
-        return tryModel(PRIMARY_MODEL, primaryModel, history, userContent)
-            ?: tryModel(FALLBACK_MODEL, fallbackModel, history, userContent)
+            tryModel(PRIMARY_MODEL, primaryModel, history, userContent)
+                ?: tryModel(FALLBACK_MODEL, fallbackModel, history, userContent)
+        } catch (ce: CancellationException) {
+            throw ce
+        } catch (t: Throwable) {
+            Log.w(TAG, "Cloud AI unavailable, falling back to local model: ${t.message}", t)
+            null
+        }
     }
 
     private suspend fun tryModel(
@@ -108,8 +116,10 @@ object FirebaseAiEngine {
                 }
                 response.text?.trim()?.takeIf { it.isNotBlank() }
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "Gemini call failed for $modelName: ${e.message}", e)
+        } catch (ce: CancellationException) {
+            throw ce
+        } catch (t: Throwable) {
+            Log.w(TAG, "Gemini call failed for $modelName: ${t.message}", t)
             null
         }
     }

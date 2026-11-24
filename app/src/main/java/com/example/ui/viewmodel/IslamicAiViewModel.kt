@@ -13,6 +13,7 @@ import com.example.data.ai.AiChatDatabase
 import com.example.data.ai.AiChatRepository
 import com.example.data.ai.AiConversationEntity
 import com.example.data.ai.AiMessageEntity
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -205,7 +206,7 @@ class IslamicAiViewModel(application: Application) : AndroidViewModel(applicatio
                     activeConversationIdFlow.value = targetConvId
 
                     val recentHistory = repository.getRecentMessagesAscending(targetConvId, limit = 8)
-                    val reply = IslamicAiModel.generateReply(
+                    val reply = IslamicAiModel.generateReplySuspend(
                         query = clean,
                         entries = loadedEntries,
                         recentMessages = recentHistory,
@@ -230,7 +231,9 @@ class IslamicAiViewModel(application: Application) : AndroidViewModel(applicatio
                 }
                 activeConversationIdFlow.value = convId
                 response.domainTag
-            } catch (error: Exception) {
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (error: Throwable) {
                 Log.e("IslamicAiViewModel", "Error generating or saving offline AI response", error)
             } finally {
                 isGeneratingFlow.value = false

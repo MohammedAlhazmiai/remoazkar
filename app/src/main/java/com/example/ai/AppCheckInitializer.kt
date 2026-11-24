@@ -102,8 +102,8 @@ object AppCheckInitializer {
                     }
                 }
                 configured = true
-            } catch (e: Exception) {
-                Log.e(TAG, "Lazy Firebase App Check initialization failed", e)
+            } catch (t: Throwable) {
+                Log.e(TAG, "Lazy Firebase App Check initialization failed", t)
             }
         }
     }

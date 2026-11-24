@@ -29,7 +29,8 @@ data class IndexedText(
 object ArabicNlpEngine {
 
     private val DIACRITICS = Regex("[\\u0610-\\u061A\\u064B-\\u065F\\u0670\\u06D6-\\u06ED\\u08F0-\\u08FF\\u0640]")
-    private val NON_ARABIC_OR_DIGIT = Regex("[^\\p{IsArabic}0-9\\s]")
+    // نطاقات اليونيكود العربية الصريحة لضمان التوافق التام مع أندرويد 7–9 (بدون \p{IsArabic} التي تسبب PatternSyntaxException)
+    private val NON_ARABIC_OR_DIGIT = Regex("[^\\u0600-\\u06FF\\u0750-\\u077F\\u08A0-\\u08FF\\uFB50-\\uFDFF\\uFE70-\\uFEFF0-9\\s]")
     private val MULTI_SPACE = Regex("\\s+")
 
     private val STOPWORDS = setOf(

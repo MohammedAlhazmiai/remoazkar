@@ -30,6 +30,44 @@ object IslamicAiModel {
         HisnRepository.ensureLoaded(context)
     }
 
+    suspend fun generateReplySuspend(
+        query: String,
+        entries: List<CorpusEntry>,
+        recentMessages: List<AiMessageEntity> = emptyList(),
+        context: Context? = null,
+        userAttachmentType: String = "",
+        userAttachmentUri: String = ""
+    ): IslamicAiResponse {
+        val cleanQuery = query.trim()
+
+        generatePreCloudReply(cleanQuery, entries, recentMessages, context, userAttachmentType)?.let {
+            return it
+        }
+
+        // الاستعلام التوليدي السحابي المتقدم عبر Firebase AI Logic (Gemini) عند توفر الإنترنت
+        if (context != null && (cleanQuery.isNotBlank() || userAttachmentType.isNotBlank())) {
+            val generativeText = try {
+                FirebaseAiEngine.generateGenerativeReply(
+                    context = context,
+                    query = cleanQuery,
+                    attachmentType = userAttachmentType,
+                    attachmentUri = userAttachmentUri,
+                    recentMessages = recentMessages
+                )
+            } catch (ce: kotlinx.coroutines.CancellationException) {
+                throw ce
+            } catch (_: Throwable) {
+                null
+            }
+
+            buildCloudResponseIfValid(cleanQuery, userAttachmentType, generativeText)?.let {
+                return it
+            }
+        }
+
+        return generateOfflineFallbackReply(cleanQuery, entries, recentMessages, context, userAttachmentType, userAttachmentUri)
+    }
+
     fun generateReply(
         query: String,
         entries: List<CorpusEntry>,
@@ -40,6 +78,39 @@ object IslamicAiModel {
     ): IslamicAiResponse {
         val cleanQuery = query.trim()
 
+        generatePreCloudReply(cleanQuery, entries, recentMessages, context, userAttachmentType)?.let {
+            return it
+        }
+
+        // الاستعلام التوليدي السحابي المتقدم عبر Firebase AI Logic (Gemini) عند توفر الإنترنت (للنداءات المتزامنة)
+        if (context != null && (cleanQuery.isNotBlank() || userAttachmentType.isNotBlank())) {
+            val generativeText = runCatching {
+                kotlinx.coroutines.runBlocking {
+                    FirebaseAiEngine.generateGenerativeReply(
+                        context = context,
+                        query = cleanQuery,
+                        attachmentType = userAttachmentType,
+                        attachmentUri = userAttachmentUri,
+                        recentMessages = recentMessages
+                    )
+                }
+            }.getOrNull()
+
+            buildCloudResponseIfValid(cleanQuery, userAttachmentType, generativeText)?.let {
+                return it
+            }
+        }
+
+        return generateOfflineFallbackReply(cleanQuery, entries, recentMessages, context, userAttachmentType, userAttachmentUri)
+    }
+
+    private fun generatePreCloudReply(
+        cleanQuery: String,
+        entries: List<CorpusEntry>,
+        recentMessages: List<AiMessageEntity>,
+        context: Context?,
+        userAttachmentType: String
+    ): IslamicAiResponse? {
         // 1. درع الانضباط الشرعي: يقتصر على العلوم الإسلامية والدردشة الأخوية الطيبة
         val isAllowed = userAttachmentType.isNotBlank() ||
             IslamicGuardrail.isAllowedQuery(cleanQuery, hasPriorContext = recentMessages.isNotEmpty())
@@ -79,51 +150,52 @@ object IslamicAiModel {
             return IslamicAiMultimodalHandler.composeImageDesignReply(cleanQuery, context, entries)
         }
 
-        // 4. الاستعلام التوليدي السحابي المتقدم عبر Firebase AI Logic (Gemini) عند توفر الإنترنت
-        if (context != null && (cleanQuery.isNotBlank() || userAttachmentType.isNotBlank())) {
-            val generativeText = runCatching {
-                kotlinx.coroutines.runBlocking {
-                    FirebaseAiEngine.generateGenerativeReply(
-                        context = context,
-                        query = cleanQuery,
-                        attachmentType = userAttachmentType,
-                        attachmentUri = userAttachmentUri,
-                        recentMessages = recentMessages
-                    )
-                }
-            }.getOrNull()
+        return null
+    }
 
-            if (!generativeText.isNullOrBlank()) {
-                val norm = ArabicNlpEngine.normalize(cleanQuery)
-                val domainTag = when {
-                    userAttachmentType == "image" -> "تحليل بصري ذكي"
-                    userAttachmentType == "audio" -> "تحليل صوتي ذكي"
-                    norm.contains("حلم") || norm.contains("رويا") || norm.contains("منام") -> IslamicIntent.DREAMS.arabicLabel
-                    norm.contains("حكم") || norm.contains("يجوز") || norm.contains("فتو") -> IslamicIntent.FATWA.arabicLabel
-                    norm.contains("خطب") -> IslamicIntent.KHUTBAH.arabicLabel
-                    norm.contains("محاضر") -> IslamicIntent.LECTURE.arabicLabel
-                    norm.contains("رسال") -> IslamicIntent.LETTER.arabicLabel
-                    norm.contains("خاطر") -> IslamicIntent.KHATIRA.arabicLabel
-                    else -> "حوار واستدلال ذكي"
-                }
-                return IslamicAiResponse(
-                    text = generativeText,
-                    domainTag = domainTag,
-                    detectedTopic = cleanQuery.take(40).ifBlank { domainTag },
-                    references = if (userAttachmentType.isNotBlank() || domainTag != "حوار واستدلال ذكي") {
-                        listOf("القرآن الكريم", "السنة النبوية الشريفة")
-                    } else {
-                        emptyList()
-                    },
-                    followUps = listOf(
-                        "وضّح لي أكثر",
-                        "أعطني دليلاً من القرآن والسنة",
-                        "اختصر لي الفكرة في نقاط"
-                    )
-                )
-            }
+    private fun buildCloudResponseIfValid(
+        cleanQuery: String,
+        userAttachmentType: String,
+        generativeText: String?
+    ): IslamicAiResponse? {
+        if (generativeText.isNullOrBlank()) return null
+        val norm = ArabicNlpEngine.normalize(cleanQuery)
+        val domainTag = when {
+            userAttachmentType == "image" -> "تحليل بصري ذكي"
+            userAttachmentType == "audio" -> "تحليل صوتي ذكي"
+            norm.contains("حلم") || norm.contains("رويا") || norm.contains("منام") -> IslamicIntent.DREAMS.arabicLabel
+            norm.contains("حكم") || norm.contains("يجوز") || norm.contains("فتو") -> IslamicIntent.FATWA.arabicLabel
+            norm.contains("خطب") -> IslamicIntent.KHUTBAH.arabicLabel
+            norm.contains("محاضر") -> IslamicIntent.LECTURE.arabicLabel
+            norm.contains("رسال") -> IslamicIntent.LETTER.arabicLabel
+            norm.contains("خاطر") -> IslamicIntent.KHATIRA.arabicLabel
+            else -> "حوار واستدلال ذكي"
         }
+        return IslamicAiResponse(
+            text = generativeText,
+            domainTag = domainTag,
+            detectedTopic = cleanQuery.take(40).ifBlank { domainTag },
+            references = if (userAttachmentType.isNotBlank() || domainTag != "حوار واستدلال ذكي") {
+                listOf("القرآن الكريم", "السنة النبوية الشريفة")
+            } else {
+                emptyList()
+            },
+            followUps = listOf(
+                "وضّح لي أكثر",
+                "أعطني دليلاً من القرآن والسنة",
+                "اختصر لي الفكرة في نقاط"
+            )
+        )
+    }
 
+    private fun generateOfflineFallbackReply(
+        cleanQuery: String,
+        entries: List<CorpusEntry>,
+        recentMessages: List<AiMessageEntity>,
+        context: Context?,
+        userAttachmentType: String,
+        userAttachmentUri: String
+    ): IslamicAiResponse {
         // 5. الدردشة اليومية الودية المحلية عند العمل بدون إنترنت
         if (userAttachmentType.isBlank() && cleanQuery.isNotBlank()) {
             val dailyOfflineMatch = IslamicDailyChatEngine.matchDailyChat(cleanQuery)

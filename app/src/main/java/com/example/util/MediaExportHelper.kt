@@ -37,7 +37,10 @@ object MediaExportHelper {
         val cleanContent = ShareUtil.formatReadableText(content)
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val dateHuman = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale("ar")).format(Date())
-        val safeTitle = title.replace(Regex("[^\\p{IsArabic}a-zA-Z0-9_]"), "_").take(30).ifBlank { "رد_إسلامي" }
+        val safeTitle = title
+            .replace(Regex("[^\\u0600-\\u06FF\\u0750-\\u077F\\u08A0-\\u08FF\\uFB50-\\uFDFF\\uFE70-\\uFEFFa-zA-Z0-9_]"), "_")
+            .take(30)
+            .ifBlank { "رد_إسلامي" }
         val fileName = "زاد_المسلم_${safeTitle}_$timestamp.txt"
 
         val fileHeader = buildString {
@@ -69,9 +72,17 @@ object MediaExportHelper {
             } ?: throw IllegalStateException("تعذر الكتابة في الملف")
             "مجلد التنزيلات (Downloads/ZadAlMuslim/$fileName)"
         } else {
-            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            val subDir = File(downloadsDir, "ZadAlMuslim").apply { mkdirs() }
-            val file = File(subDir, fileName)
+            val publicSubDir = runCatching {
+                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                File(downloadsDir, "ZadAlMuslim").apply { mkdirs() }
+            }.getOrNull()
+            val targetDir = if (publicSubDir != null && publicSubDir.canWrite()) {
+                publicSubDir
+            } else {
+                val appDownloads = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
+                File(appDownloads, "ZadAlMuslim").apply { mkdirs() }
+            }
+            val file = File(targetDir, fileName)
             FileOutputStream(file).use { out ->
                 out.write("\uFEFF".toByteArray(Charsets.UTF_8))
                 out.write(fileHeader.toByteArray(Charsets.UTF_8))
@@ -106,9 +117,17 @@ object MediaExportHelper {
             context.contentResolver.update(uri, values, null, null)
             "معرض الصور (Pictures/ZadAlMuslim)"
         } else {
-            val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-            val subDir = File(picturesDir, "ZadAlMuslim").apply { mkdirs() }
-            val destFile = File(subDir, fileName)
+            val publicSubDir = runCatching {
+                val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+                File(picturesDir, "ZadAlMuslim").apply { mkdirs() }
+            }.getOrNull()
+            val targetDir = if (publicSubDir != null && publicSubDir.canWrite()) {
+                publicSubDir
+            } else {
+                val appPictures = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES) ?: context.filesDir
+                File(appPictures, "ZadAlMuslim").apply { mkdirs() }
+            }
+            val destFile = File(targetDir, fileName)
             imageFile.copyTo(destFile, overwrite = true)
             destFile.absolutePath
         }

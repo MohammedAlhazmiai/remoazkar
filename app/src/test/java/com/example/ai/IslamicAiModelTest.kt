@@ -2,6 +2,7 @@ package com.example.ai
 
 import com.example.data.ai.AiChatRepository
 import com.example.data.ai.AiMessageEntity
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -203,5 +204,17 @@ class IslamicAiModelTest {
         val happyNews = IslamicAiModel.generateReply("الحمد لله نجحت في الاختبار وأبشرك", corpus)
         assertEquals("دردشة أخوية يومية", happyNews.domainTag)
         assertTrue(happyNews.text.contains("مبارك") || happyNews.text.contains("فرحت"))
+    }
+
+    @Test
+    fun portableArabicRegexAndSuspendReplyWorkWithoutLegacyAndroidCrash() = runBlocking {
+        val normalized = ArabicNlpEngine.normalize("السَّلَامُ عَلَيْكُمْ! 123 — هل يجوز الصيام؟")
+        assertTrue(normalized.contains("السلام عليكم"))
+        assertTrue(normalized.contains("123"))
+        assertTrue(normalized.contains("هل يجوز الصيام"))
+
+        val suspendReply = IslamicAiModel.generateReplySuspend("مرحبا", corpus)
+        assertEquals(IslamicIntent.GREETING.arabicLabel, suspendReply.domainTag)
+        assertFalse(suspendReply.text.isBlank())
     }
 }

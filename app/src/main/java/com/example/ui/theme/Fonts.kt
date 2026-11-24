@@ -1,5 +1,6 @@
 package com.example.ui.theme
 
+import android.os.Build
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -28,21 +29,6 @@ object AppFonts {
         Font(R.font.scheherazade_bold, FontWeight.Bold)
     )
 
-    /** نسخ نوتو — خط نسخ حديث عالي الوضوح على الشاشات. */
-    val NotoNaskh: FontFamily = FontFamily(
-        Font(R.font.notonaskh, FontWeight.Normal)
-    )
-
-    /** ريم كوفي — خط كوفي هندسي حديث للعناوين. */
-    val ReemKufi: FontFamily = FontFamily(
-        Font(R.font.reemkufi, FontWeight.Normal)
-    )
-
-    /** القاهرة — خط عربي حديث مريح للقراءة على الشاشة. */
-    val Cairo: FontFamily = FontFamily(
-        Font(R.font.cairo, FontWeight.Normal)
-    )
-
     /** لطيف — خط نسخ رفيع واقتصادي في المساحة. */
     val Lateef: FontFamily = FontFamily(
         Font(R.font.lateef_regular, FontWeight.Normal)
@@ -52,6 +38,27 @@ object AppFonts {
     val ArefRuqaa: FontFamily = FontFamily(
         Font(R.font.arefruqaa_regular, FontWeight.Normal)
     )
+
+    /** نسخ نوتو — على أندرويد 7–9 نستخدم Amiri الثابت تفاديًا لأخطاء الخطوط المتغيرة (fvar). */
+    val NotoNaskh: FontFamily = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        FontFamily(Font(R.font.notonaskh, FontWeight.Normal))
+    } else {
+        Amiri
+    }
+
+    /** ريم كوفي — على أندرويد 7–9 نستخدم ArefRuqaa الثابت تفاديًا لأخطاء الخطوط المتغيرة (fvar). */
+    val ReemKufi: FontFamily = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        FontFamily(Font(R.font.reemkufi, FontWeight.Normal))
+    } else {
+        ArefRuqaa
+    }
+
+    /** القاهرة — على أندرويد 7–9 نستخدم Scheherazade الثابت تفاديًا لأخطاء الخطوط المتغيرة (fvar). */
+    val Cairo: FontFamily = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        FontFamily(Font(R.font.cairo, FontWeight.Normal))
+    } else {
+        Scheherazade
+    }
 
     /** قائمة الخطوط المتاحة بالترتيب المطابق لمؤشر التخزين. */
     val all: List<FontOption> = listOf(
