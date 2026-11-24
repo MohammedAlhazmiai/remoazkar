@@ -3,24 +3,29 @@ package com.example.data
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.media.AudioAttributes
+import android.media.MediaPlayer
 import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import com.example.MainActivity
 import com.example.R
+import com.example.service.AudioAzkarPlaybackService
+import com.example.service.PlaybackWakeLock
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 
 /**
  * إشعارات التذكير — تعمل من أندرويد 7 (API 24) حتى أحدث إصدار.
- *
- * - من أندرويد 8 (API 26) صار الصوت والاهتزاز مرتبطًا بـ "قناة الإشعار" لا بالإشعار نفسه،
- *   لذلك نُنشئ قناتين لكل نوع: قناة بصوت وقناة صامتة، ونختار القناة حسب إعداد المستخدم.
- * - قبل أندرويد 8 نضبط الصوت والاهتزاز مباشرة على الإشعار.
- * - الإذن POST_NOTIFICATIONS مطلوب من أندرويد 13 ويُطلب من الواجهة.
  */
 object NotificationHelper {
 
@@ -30,8 +35,10 @@ object NotificationHelper {
     const val CHANNEL_DAILY_SILENT = "rim_daily_silent"
     const val CHANNEL_HUMAN_AZKAR = "rim_human_azkar_v1"
     const val CHANNEL_HUMAN_AZKAR_SILENT = "rim_human_azkar_silent"
-    const val CHANNEL_PRAYERS = "zad_prayers_v1"
+    const val CHANNEL_PRAYERS = "zad_prayers_adhan_v2"
     const val CHANNEL_PRAYERS_SILENT = "zad_prayers_silent"
+
+    private const val TAG = "NotificationHelper"
 
     fun createChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -111,16 +118,18 @@ object NotificationHelper {
             enableVibration(false)
         }
 
+        // قناة إشعارات الصلاة: عالية الأهمية مع اهتزاز وصامتة على القناة نفسها لأن صوت بداية الأذان
+        // يُشغَّل مباشرةً عبر مشغل الصوت (AudioAzkarPlaybackService) لتجنّب التداخل أو تكرار الصوت.
         val prayers = NotificationChannel(
             CHANNEL_PRAYERS,
-            "مواقيت الصلوات الخمس (بصوت)",
+            "مواقيت الصلوات الخمس",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "تنبيهات تلقائية عند حلول مواعيد الصلوات الخمس"
+            description = "تنبيهات تلقائية عند حلول مواعيد الصلوات الخمس مع صوت بداية الأذان"
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 500, 250, 500)
             enableLights(true)
-            setSound(soundUri, audioAttrs)
+            setSound(null, null)
         }
 
         val prayersSilent = NotificationChannel(
@@ -150,6 +159,7 @@ object NotificationHelper {
             CHANNEL_PRAYERS_SILENT -> CHANNEL_PRAYERS_SILENT
             CHANNEL_DAILY -> if (soundEnabled) CHANNEL_DAILY else CHANNEL_DAILY_SILENT
             CHANNEL_DAILY_SILENT -> CHANNEL_DAILY_SILENT
+            CHANNEL_HUMAN_AZKAR_SILENT -> CHANNEL_HUMAN_AZKAR_SILENT
             CHANNEL_REMINDERS_SILENT -> CHANNEL_REMINDERS_SILENT
             else -> if (soundEnabled) CHANNEL_REMINDERS else CHANNEL_REMINDERS_SILENT
         }
@@ -157,6 +167,93 @@ object NotificationHelper {
 
     fun showPrayerNotification(context: Context, id: Int, title: String, body: String) {
         show(context, id, title, body, CHANNEL_PRAYERS)
+    }
+
+    /**
+     * يُطلق تنبيه الصلاة الكامل عند حلول موعد التذكير فقط:
+     * 1) يُظهر إشعار الصلاة عالي الأولوية (حتى في شاشة القفل).
+     * 2) يُشغّل صوت بداية الأذان (R.raw.adhan_start) مرة واحدة فقط إذا كان مفعّلاً.
+     */
+    fun triggerPrayerReminderAlert(
+        context: Context,
+        id: Int,
+        title: String,
+        body: String,
+        playAdhanStart: Boolean = true,
+        pendingResult: BroadcastReceiver.PendingResult? = null
+    ) {
+        val appContext = context.applicationContext
+        showPrayerNotification(appContext, id, title, body)
+
+        val shouldPlayAdhan = playAdhanStart &&
+            PreferencesManager.isNotificationSoundEnabled(appContext) &&
+            PrayerStore.isAdhanSoundEnabled(appContext)
+
+        if (!shouldPlayAdhan) {
+            PlaybackWakeLock.release()
+            pendingResult?.finish()
+            return
+        }
+
+        val playbackIntent = Intent(appContext, AudioAzkarPlaybackService::class.java).apply {
+            putExtra(AudioAzkarPlaybackService.EXTRA_IS_ADHAN, true)
+            putExtra(AudioAzkarPlaybackService.EXTRA_TITLE, title)
+            putExtra(AudioAzkarPlaybackService.EXTRA_SUBTITLE, body)
+        }
+
+        val serviceStarted = runCatching {
+            ContextCompat.startForegroundService(appContext, playbackIntent)
+            true
+        }.getOrElse { error ->
+            Log.w(TAG, "Background FGS denied for Adhan start; playing via direct MediaPlayer fallback", error)
+            false
+        }
+
+        if (serviceStarted) {
+            pendingResult?.finish()
+            return
+        }
+
+        // خطة احتياطية مباشرة لنطق بداية الأذان (3.2 ثانية) إذا قيّد النظام تشغيل الخدمة الخلفية
+        thread(start = true, name = "AdhanStartFallbackPlayer") {
+            val doneLatch = CountDownLatch(1)
+            var mp: MediaPlayer? = null
+            try {
+                val player = MediaPlayer().apply {
+                    setWakeMode(appContext, PowerManager.PARTIAL_WAKE_LOCK)
+                    setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+                    setVolume(1.0f, 1.0f)
+                    setOnCompletionListener { doneLatch.countDown() }
+                    setOnErrorListener { _, _, _ ->
+                        doneLatch.countDown()
+                        true
+                    }
+                    appContext.resources.openRawResourceFd(R.raw.adhan_start).use { afd ->
+                        setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                    }
+                    prepare()
+                    start()
+                }
+                mp = player
+                doneLatch.await(8, TimeUnit.SECONDS)
+            } catch (e: Exception) {
+                Log.e(TAG, "Direct Adhan-start playback failed", e)
+            } finally {
+                runCatching {
+                    mp?.apply {
+                        if (isPlaying) stop()
+                        release()
+                    }
+                }
+                PlaybackWakeLock.release()
+                pendingResult?.finish()
+            }
+        }
     }
 
     fun show(context: Context, id: Int, title: String, body: String, channel: String = CHANNEL_REMINDERS) {
@@ -183,14 +280,22 @@ object NotificationHelper {
                 else NotificationCompat.PRIORITY_LOW
             )
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(true)
             .setContentIntent(pi)
 
-        if (soundEnabled) {
+        val usesChannelAudio = targetChannel != CHANNEL_PRAYERS &&
+            targetChannel != CHANNEL_PRAYERS_SILENT &&
+            targetChannel != CHANNEL_HUMAN_AZKAR_SILENT &&
+            targetChannel != CHANNEL_REMINDERS_SILENT &&
+            targetChannel != CHANNEL_DAILY_SILENT
+
+        if (soundEnabled && targetChannel != CHANNEL_HUMAN_AZKAR_SILENT) {
             builder.setVibrate(longArrayOf(0, 400, 200, 400))
-            // قبل أندرويد 8 لا توجد قنوات، فيُضبط الصوت على الإشعار نفسه
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O && usesChannelAudio) {
                 builder.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION))
+            } else if (targetChannel == CHANNEL_PRAYERS) {
+                builder.setSound(null)
             }
         } else {
             builder.setSilent(true)

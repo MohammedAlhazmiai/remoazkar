@@ -140,6 +140,9 @@ class MainActivity : ComponentActivity() {
         runStartupStep("prayer alarm scheduling") {
             PrayerAlarmScheduler.scheduleAll(applicationContext)
         }
+        runStartupStep("human azkar scheduling") {
+            com.example.data.HumanAzkarScheduler.rescheduleIfEnabled(applicationContext, forceNew = false)
+        }
         runStartupStep("smart reader history") { SmartReaderBus.load(applicationContext) }
         runStartupStep("hijri offset") { HijriCalendar.initOffset(applicationContext) }
 

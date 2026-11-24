@@ -1,8 +1,15 @@
 package com.example.ui.screens
 
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -32,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.AsrMadhab
 import com.example.data.HijriCalendar
+import com.example.data.HumanAzkarScheduler
 import com.example.data.NotificationHelper
 import com.example.data.PrayerAlarmScheduler
 import com.example.data.PrayerCalculationMethod
@@ -63,14 +71,52 @@ fun PrayerTimesScreen(onBackClick: () -> Unit) {
     }
 
     var notifEnabled by remember(rev) { mutableStateOf(PrayerStore.isNotificationsEnabled(context)) }
+    var adhanSoundEnabled by remember(rev) { mutableStateOf(PrayerStore.isAdhanSoundEnabled(context)) }
     var leadMinutes by remember(rev) { mutableIntStateOf(PrayerStore.leadMinutes(context)) }
     var selectedMethod by remember(rev) { mutableStateOf(PrayerStore.method(context)) }
     var selectedMadhab by remember(rev) { mutableStateOf(PrayerStore.madhab(context)) }
+    var hasNotifPerm by remember { mutableStateOf(PrayerAlarmScheduler.hasNotificationPermission(context)) }
+    var canScheduleExact by remember { mutableStateOf(PrayerAlarmScheduler.canScheduleExactAlarms(context)) }
+    var ignoringBattery by remember { mutableStateOf(HumanAzkarScheduler.isIgnoringBatteryOptimizations(context)) }
     var isLocating by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
 
     var editingPrayer by remember { mutableStateOf<ResolvedPrayerTime?>(null) }
     var showCityPicker by remember { mutableStateOf(false) }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, context, notifEnabled) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasNotifPerm = PrayerAlarmScheduler.hasNotificationPermission(context)
+                canScheduleExact = PrayerAlarmScheduler.canScheduleExactAlarms(context)
+                ignoringBattery = HumanAzkarScheduler.isIgnoringBatteryOptimizations(context)
+                if (notifEnabled) {
+                    PrayerAlarmScheduler.scheduleAll(context)
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(notifEnabled) {
+        if (notifEnabled) {
+            PrayerAlarmScheduler.scheduleAll(context)
+        }
+    }
+
+    val notificationPermLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasNotifPerm = granted || PrayerAlarmScheduler.hasNotificationPermission(context)
+        if (granted) {
+            PrayerAlarmScheduler.scheduleAll(context)
+            statusMessage = "تم تفعيل إذن الإشعارات وجدولة مواقيت الصلاة بنجاح."
+        } else {
+            statusMessage = "يرجى السماح بإشعارات التطبيق من الإعدادات لتظهر تنبيهات الصلاة."
+        }
+    }
 
     val locationLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -256,7 +302,104 @@ fun PrayerTimesScreen(onBackClick: () -> Unit) {
                                 onCheckedChange = { checked ->
                                     notifEnabled = checked
                                     PrayerStore.setNotificationsEnabled(context, checked)
+                                    if (checked) {
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotifPerm) {
+                                            notificationPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                        }
+                                        statusMessage = "تم تفعيل وجدولة تنبيهات الصلوات الخمس."
+                                    }
                                 }
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("صوت بداية الأذان عند التذكير", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                Text(
+                                    "ينطق «الله أكبر، الله أكبر» مرة واحدة عند حلول التذكير فقط",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = adhanSoundEnabled,
+                                onCheckedChange = { checked ->
+                                    adhanSoundEnabled = checked
+                                    PrayerStore.setAdhanSoundEnabled(context, checked)
+                                }
+                            )
+                        }
+
+                        if (notifEnabled && (!hasNotifPerm || !canScheduleExact || !ignoringBattery)) {
+                            Spacer(Modifier.height(8.dp))
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotifPerm) {
+                                        Text(
+                                            "• إذن الإشعارات غير مفعّل؛ اضغط لتفعيله الآن.",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                        OutlinedButton(
+                                            onClick = { notificationPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) { Text("منح إذن الإشعارات") }
+                                    }
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !canScheduleExact) {
+                                        Text(
+                                            "• إذن المنبهات الدقيقة غير مفعّل؛ قد يتأخر الأذان في وضع السكون.",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                        OutlinedButton(
+                                            onClick = {
+                                                runCatching {
+                                                    context.startActivity(
+                                                        Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                                                            data = Uri.fromParts("package", context.packageName, null)
+                                                        }
+                                                    )
+                                                }
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) { Text("تفعيل المنبهات الدقيقة للصلاة") }
+                                    }
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !ignoringBattery) {
+                                        OutlinedButton(
+                                            onClick = {
+                                                runCatching {
+                                                    context.startActivity(
+                                                        Intent(
+                                                            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                                            Uri.fromParts("package", context.packageName, null)
+                                                        )
+                                                    )
+                                                }
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) { Text("استثناء من تحسين البطارية (لقفل الشاشة)") }
+                                    }
+                                }
+                            }
+                        } else if (notifEnabled) {
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "التنبيهات مفعّلة فعليًا وجاهزة للعمل في الخلفية وقفل الشاشة.",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
 
@@ -326,13 +469,19 @@ fun PrayerTimesScreen(onBackClick: () -> Unit) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(
                                 onClick = {
-                                    NotificationHelper.showPrayerNotification(
-                                        context,
-                                        5199,
-                                        "تنبيه تجريبي لمواعيد الصلاة",
-                                        "تنبيهات الصلوات الخمس مفعّلة وتعمل بنجاح."
+                                    PrayerAlarmScheduler.scheduleAll(context)
+                                    NotificationHelper.triggerPrayerReminderAlert(
+                                        context = context,
+                                        id = 5199,
+                                        title = "تنبيه تجريبي لمواعيد الصلاة",
+                                        body = "بداية الأذان: الله أكبر، الله أكبر — تنبيهات الصلوات الخمس مفعّلة وتعمل بنجاح.",
+                                        playAdhanStart = adhanSoundEnabled
                                     )
-                                    statusMessage = "تم إرسال إشعار تجريبي لمواعيد الصلاة"
+                                    statusMessage = if (adhanSoundEnabled) {
+                                        "تم تشغيل التنبيه التجريبي مع صوت بداية الأذان"
+                                    } else {
+                                        "تم إرسال إشعار تجريبي صامت لمواعيد الصلاة"
+                                    }
                                 },
                                 modifier = Modifier
                                     .weight(1f)

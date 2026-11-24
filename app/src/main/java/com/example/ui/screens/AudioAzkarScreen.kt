@@ -195,6 +195,7 @@ private fun HumanRecordingsContent() {
     var customInterval by rememberSaveable { mutableStateOf("") }
     var customUnitIsHours by rememberSaveable { mutableStateOf(false) }
     var canScheduleExact by remember { mutableStateOf(HumanAzkarScheduler.canScheduleExactAlarms(context)) }
+    var ignoringBattery by remember { mutableStateOf(HumanAzkarScheduler.isIgnoringBatteryOptimizations(context)) }
     var pendingExactPermissionEnable by rememberSaveable { mutableStateOf(false) }
 
     val applyEnabled: (Boolean) -> Unit = { shouldEnable ->
@@ -232,6 +233,7 @@ private fun HumanRecordingsContent() {
                 val exactPermissionNow = HumanAzkarScheduler.canScheduleExactAlarms(context)
                 val permissionChanged = exactPermissionNow != canScheduleExact
                 canScheduleExact = exactPermissionNow
+                ignoringBattery = HumanAzkarScheduler.isIgnoringBatteryOptimizations(context)
 
                 if (pendingExactPermissionEnable) {
                     pendingExactPermissionEnable = false
@@ -241,7 +243,7 @@ private fun HumanRecordingsContent() {
                         Toast.makeText(context, "لم تُمنح صلاحية المنبهات الدقيقة؛ لم يتم تفعيل الجدولة.", Toast.LENGTH_LONG).show()
                     }
                 } else if (permissionChanged && enabled) {
-                    val scheduled = HumanAzkarScheduler.rescheduleIfEnabled(context)
+                    val scheduled = HumanAzkarScheduler.rescheduleIfEnabled(context, forceNew = false)
                     if (!scheduled && exactPermissionNow) {
                         Toast.makeText(context, "تعذّرت إعادة جدولة التسجيلات. أعد تفعيلها من الشاشة.", Toast.LENGTH_LONG).show()
                     }
@@ -379,8 +381,8 @@ private fun HumanRecordingsContent() {
 
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                         Text(
-                            if (canScheduleExact) "صلاحية المنبهات الدقيقة متاحة؛ يستخدمها التطبيق لبدء خدمة تشغيل التسجيل عند الموعد. قد يؤخر Android بعض المواعيد في وضع توفير الطاقة."
-                            else "صلاحية المنبهات الدقيقة غير متاحة؛ لن يبدأ التشغيل الدوري للتسجيلات في الخلفية. امنح هذه الصلاحية أولًا؛ لا يُستبدل تشغيل المقطع بإشعار يُعرض وكأنه تشغيل ناجح.",
+                            if (canScheduleExact) "صلاحية المنبهات الدقيقة متاحة؛ يعمل النطق الصوتي تلقائيًا في قفل الشاشة وعند إزالة التطبيق من شاشة المهام."
+                            else "صلاحية المنبهات الدقيقة غير متاحة؛ امنحها أولًا ليعمل النطق بدقة في قفل الشاشة وعند إغلاق التطبيق.",
                             fontSize = 12.sp,
                             lineHeight = 18.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -392,8 +394,23 @@ private fun HumanRecordingsContent() {
                             ) { Text("فتح إعدادات المنبهات الدقيقة") }
                         }
                     }
+                    if (!ignoringBattery && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        OutlinedButton(
+                            onClick = {
+                                runCatching {
+                                    context.startActivity(
+                                        Intent(
+                                            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                            Uri.fromParts("package", context.packageName, null)
+                                        )
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("استثناء التطبيق من تحسين البطارية (موصى به)") }
+                    }
                     Text(
-                        "قد يسلّم Android منبهات «السماح أثناء الخمول» مرة واحدة تقريبًا في الدقيقة في الظروف العادية، لكنه قد يباعد بينها إلى نحو 15 دقيقة أو أكثر في وضع Doze. لذلك لا يمكن ضمان فواصل 1–5 دقائق أثناء السكون. السماح بإشعارات التطبيق يُظهر إشعار الخدمة المستمر، لكنه ليس شرطًا لبدء تشغيل التسجيل. إزالة التطبيق من التطبيقات الحديثة لا توقف المنبه عادةً؛ أما «فرض الإيقاف» أو قيود البطارية/التشغيل التلقائي لدى بعض الشركات فقد توقفه حتى إعادة السماح به.",
+                        "تم ربط المجدول بمنبّهات النظام عالية الأولوية مع قفل إيقاظ مباشر ومشغّل احتياطي لضمان استمرار نطق الأذكار الصوتية البشرية أثناء قفل الشاشة وبعد إزالة التطبيق من شاشة المهام.",
                         fontSize = 11.sp,
                         lineHeight = 17.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant

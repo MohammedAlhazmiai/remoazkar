@@ -10,9 +10,14 @@ import android.content.Intent
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.media.MediaMetadata
 import android.media.MediaPlayer
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.PowerManager
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
@@ -22,19 +27,21 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.app.NotificationCompat
 import com.example.MainActivity
+import com.example.R
 import com.example.data.HumanAzkarAudioCatalog
+import com.example.data.HumanAzkarScheduler
 import com.example.data.NotificationHelper
+import com.example.data.PrayerAlarmScheduler
 import java.util.Locale
 
 /**
- * خدمة تشغيل الأذكار الصوتية في الخلفية.
+ * خدمة تشغيل الأذكار الصوتية وبداية الأذان في الخلفية.
  *
- * - التسجيلات البشرية تُشغَّل **مقطعًا واحدًا في كل مرة**، ثم يتوقف التشغيل، ويعود الدور إلى
- *   المجدول الزمني (`HumanAzkarScheduler`) ليُشغّل المقطع التالي بعد الفاصل الذي اختاره المستخدم
- *   (دقائق أو ساعات، جاهزة أو يدوية). لا يوجد أي تشغيل تسلسلي متواصل.
- * - تُحفظ حالة التشغيل في SharedPreferences حتى تستأنف الخدمة نفسها إن أعادها النظام.
- * - الخدمة أمامية (Foreground) ولا تتوقف عند إزالة التطبيق من قائمة التطبيقات الحديثة
- *   (`android:stopWithTask="false"` + `onTaskRemoved`)، وتعمل مع قفل الشاشة عبر WakeLock متجدّد.
+ * - التسجيلات البشرية تُشغَّل مقطعًا واحدًا في كل مرة، ثم يتوقف التشغيل، ويعود الدور إلى
+ *   المجدول الزمني (HumanAzkarScheduler) لتشغيل المقطع التالي بعد الفاصل المحدد.
+ * - صوت بداية الأذان (adhan_start) يُشغَّل مرة واحدة فقط عند حلول تذكير الصلاة.
+ * - تدعم الاستمرار في قفل الشاشة وعند إزالة التطبيق من شاشة المهام عبر MediaSession + WakeLock +
+ *   android:stopWithTask="false".
  */
 class AudioAzkarPlaybackService : Service() {
 
@@ -47,9 +54,13 @@ class AudioAzkarPlaybackService : Service() {
     private var mediaPlayer: MediaPlayer? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var audioFocusRequest: AudioFocusRequest? = null
+    private var mediaSession: MediaSession? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var clipWatchdogRunnable: Runnable? = null
 
-    /** نوع التشغيل الحالي: تسجيل بشري أو نص عبر TTS. */
+    /** نوع التشغيل الحالي: تسجيل بشري أو بداية أذان أو نص عبر TTS. */
     private var playingHuman = false
+    private var playingAdhan = false
     private var humanIndex = 0
 
     private val prefs by lazy {
@@ -74,7 +85,7 @@ class AudioAzkarPlaybackService : Service() {
         renewWakeLock()
     }
 
-    /** يُجدَّد عند كل مقطع حتى لا ينتهي أثناء التشغيل الطويل. */
+    /** يُجدَّد عند كل مقطع حتى لا ينتهي أثناء التشغيل في قفل الشاشة. */
     private fun renewWakeLock() {
         try {
             wakeLock?.acquire(60 * 60 * 1000L)
@@ -88,6 +99,54 @@ class AudioAzkarPlaybackService : Service() {
         } catch (_: Exception) {
         }
         wakeLock = null
+        PlaybackWakeLock.release()
+    }
+
+    /* --------------------------- MediaSession --------------------------- */
+
+    private fun updateMediaSession(title: String, playing: Boolean) {
+        runCatching {
+            val session = mediaSession ?: MediaSession(applicationContext, "ZadAlMuslimAzkarSession").also {
+                it.setFlags(
+                    MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or
+                        MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS
+                )
+                it.setCallback(object : MediaSession.Callback() {
+                    override fun onStop() {
+                        stopPlayback()
+                    }
+
+                    override fun onPause() {
+                        stopPlayback()
+                    }
+                })
+                mediaSession = it
+            }
+            session.setMetadata(
+                MediaMetadata.Builder()
+                    .putString(MediaMetadata.METADATA_KEY_TITLE, title)
+                    .build()
+            )
+            val state = if (playing) PlaybackState.STATE_PLAYING else PlaybackState.STATE_STOPPED
+            session.setPlaybackState(
+                PlaybackState.Builder()
+                    .setActions(PlaybackState.ACTION_STOP or PlaybackState.ACTION_PAUSE)
+                    .setState(state, 0L, 1.0f)
+                    .build()
+            )
+            session.isActive = playing
+        }
+    }
+
+    private fun releaseMediaSession() {
+        val session = mediaSession
+        mediaSession = null
+        if (session != null) {
+            runCatching {
+                session.isActive = false
+                session.release()
+            }
+        }
     }
 
     /* --------------------------- onStartCommand -------------------------- */
@@ -105,10 +164,18 @@ class AudioAzkarPlaybackService : Service() {
         }
 
         pendingTitle = intent.getStringExtra(EXTRA_TITLE)?.takeIf { it.isNotBlank() } ?: DEFAULT_TITLE
-        val audioResourceName = intent.getStringExtra(EXTRA_AUDIO_RESOURCE_NAME)?.trim().orEmpty()
 
+        if (intent.getBooleanExtra(EXTRA_IS_ADHAN, false)) {
+            val subtitle = intent.getStringExtra(EXTRA_SUBTITLE)
+                ?.takeIf { it.isNotBlank() }
+                ?: "بداية الأذان — الله أكبر، الله أكبر"
+            acquireWakeLock()
+            playAdhanStartClip(pendingTitle, subtitle)
+            return START_NOT_STICKY
+        }
+
+        val audioResourceName = intent.getStringExtra(EXTRA_AUDIO_RESOURCE_NAME)?.trim().orEmpty()
         if (audioResourceName.isNotBlank()) {
-            // لا تسلسل: أي طلب جديد يستبدل المقطع الحالي ويُشغّل المقطع المطلوب مرة واحدة.
             acquireWakeLock()
             playHumanRecording(audioResourceName)
             return START_STICKY
@@ -121,21 +188,63 @@ class AudioAzkarPlaybackService : Service() {
             return START_NOT_STICKY
         }
         acquireWakeLock()
+        cancelClipWatchdog()
         releaseMediaPlayer()
         playingHuman = false
+        playingAdhan = false
+        activeResourceName = null
         pendingText = text
         persistState(mode = MODE_TEXT, title = pendingTitle, text = text, index = 0)
-        startForegroundCompat(buildNotification(pendingTitle, text.take(120)))
+        updateMediaSession(pendingTitle, playing = true)
+        try {
+            startForegroundCompat(buildNotification(pendingTitle, text.take(120)))
+        } catch (error: Exception) {
+            Log.e(TAG, "Unable to promote TTS service to foreground", error)
+            stopPlayback()
+            return START_NOT_STICKY
+        }
         if (tts == null) initializeTts() else if (ready) speakPending()
         return START_STICKY
     }
 
-    /* ------------------------ التسجيلات البشرية ------------------------ */
+    /* ------------------------ بداية الأذان والتسجيلات البشرية ------------------------ */
+
+    private fun playAdhanStartClip(title: String, subtitle: String) {
+        tts?.stop()
+        cancelClipWatchdog()
+        releaseMediaPlayer()
+        playingHuman = false
+        playingAdhan = true
+        activeResourceName = null
+        pendingText = null
+        prefs.edit().putBoolean(KEY_PLAYING, false).commit()
+
+        acquireWakeLock()
+        renewWakeLock()
+        updateMediaSession(title, playing = true)
+
+        try {
+            startForegroundCompat(buildNotification(title, subtitle))
+        } catch (error: Exception) {
+            Log.e(TAG, "Could not promote Adhan service to foreground", error)
+            finishRawClip()
+            return
+        }
+
+        startRawResourcePlayer(
+            resourceId = R.raw.adhan_start,
+            resourceLabel = "adhan_start",
+            reportFallbackOnError = false
+        )
+    }
 
     private fun playHumanRecording(resourceName: String) {
         tts?.stop()
+        cancelClipWatchdog()
         releaseMediaPlayer()
         playingHuman = true
+        playingAdhan = false
+        pendingText = null
         humanIndex = HumanAzkarAudioCatalog.tracks
             .indexOfFirst { it.resourceName == resourceName }
             .takeIf { it >= 0 } ?: 0
@@ -149,6 +258,7 @@ class AudioAzkarPlaybackService : Service() {
         acquireWakeLock()
         renewWakeLock()
         persistState(mode = MODE_HUMAN, title = track.title, text = "", index = humanIndex)
+        updateMediaSession(track.title, playing = true)
         try {
             startForegroundCompat(
                 buildNotification(
@@ -175,9 +285,22 @@ class AudioAzkarPlaybackService : Service() {
             return
         }
 
+        startRawResourcePlayer(
+            resourceId = resourceId,
+            resourceLabel = track.resourceName,
+            reportFallbackOnError = true
+        )
+    }
+
+    private fun startRawResourcePlayer(
+        resourceId: Int,
+        resourceLabel: String,
+        reportFallbackOnError: Boolean
+    ) {
         requestTransientAudioFocus()
         val player = MediaPlayer()
         mediaPlayer = player
+        scheduleClipWatchdog()
         try {
             player.setWakeMode(applicationContext, PowerManager.PARTIAL_WAKE_LOCK)
             player.setAudioAttributes(
@@ -187,30 +310,22 @@ class AudioAzkarPlaybackService : Service() {
                     .build()
             )
             player.setVolume(1.0f, 1.0f)
-            player.setOnPreparedListener { prepared ->
-                if (mediaPlayer === prepared) {
-                    runCatching { prepared.start() }.onFailure { error ->
-                        reportHumanPlaybackFailure(
-                            track.resourceName,
-                            "MediaPlayer.start failed for ${track.resourceName}",
-                            error
-                        )
-                    }
-                }
-            }
-            // عند انتهاء المقطع يتوقف التشغيل؛ المقطع التالي يأتي من المجدول الزمني حسب الفاصل المختار.
             player.setOnCompletionListener { completed ->
                 if (mediaPlayer === completed) {
-                    releaseMediaPlayer()
-                    finishHumanTrack()
+                    finishRawClip()
                 }
             }
             player.setOnErrorListener { _, what, extra ->
-                reportHumanPlaybackFailure(
-                    track.resourceName,
-                    "MediaPlayer error for ${track.resourceName}: what=$what extra=$extra",
-                    null
-                )
+                if (reportFallbackOnError) {
+                    reportHumanPlaybackFailure(
+                        resourceLabel,
+                        "MediaPlayer error for $resourceLabel: what=$what extra=$extra",
+                        null
+                    )
+                } else {
+                    Log.e(TAG, "MediaPlayer error for $resourceLabel: what=$what extra=$extra")
+                    finishRawClip()
+                }
                 true
             }
             resources.openRawResourceFd(resourceId).use { descriptor ->
@@ -220,14 +335,39 @@ class AudioAzkarPlaybackService : Service() {
                     descriptor.length
                 )
             }
-            player.prepareAsync()
+            player.prepare()
+            if (mediaPlayer === player) {
+                player.start()
+            }
         } catch (error: Exception) {
-            reportHumanPlaybackFailure(
-                track.resourceName,
-                "Could not prepare human-azkar audio ${track.resourceName}",
-                error
-            )
+            if (reportFallbackOnError) {
+                reportHumanPlaybackFailure(
+                    resourceLabel,
+                    "Could not prepare/start human-azkar audio $resourceLabel",
+                    error
+                )
+            } else {
+                Log.e(TAG, "Could not prepare/start raw clip $resourceLabel", error)
+                finishRawClip()
+            }
         }
+    }
+
+    private fun scheduleClipWatchdog() {
+        cancelClipWatchdog()
+        val runnable = Runnable {
+            if (playingHuman || playingAdhan) {
+                Log.w(TAG, "Playback watchdog fired; releasing completed/stalled clip cleanly")
+                finishRawClip()
+            }
+        }
+        clipWatchdogRunnable = runnable
+        mainHandler.postDelayed(runnable, 25_000L)
+    }
+
+    private fun cancelClipWatchdog() {
+        clipWatchdogRunnable?.let { mainHandler.removeCallbacks(it) }
+        clipWatchdogRunnable = null
     }
 
     private fun reportHumanPlaybackFailure(resourceName: String, message: String, error: Throwable?) {
@@ -237,11 +377,11 @@ class AudioAzkarPlaybackService : Service() {
                 context = applicationContext,
                 id = NOTIFICATION_ID + 1,
                 title = "تعذّر تشغيل التسجيل",
-                body = "فشل تشغيل ملف الذكر كمقطع صوتي؛ تحقق من تحديث التطبيق وإعدادات التشغيل في الخلفية.",
+                body = "فشل تشغيل ملف الذكر كمقطع صوتي؛ تحقق من إعدادات التشغيل في الخلفية.",
                 resourceName = resourceName
             )
         }
-        finishHumanTrack()
+        finishRawClip()
     }
 
     private fun requestTransientAudioFocus() {
@@ -285,14 +425,15 @@ class AudioAzkarPlaybackService : Service() {
 
     /**
      * إنهاء تشغيل المقطع الحالي دون الانتقال إلى مقطع آخر.
-     * المجدول الزمني (HumanAzkarScheduler) هو من يُحدّد موعد المقطع التالي حسب الفاصل المختار،
-     * لذا لا نعيد الجدولة هنا حتى يبقى الفاصل دقيقًا من لحظة المنبّه.
      */
-    private fun finishHumanTrack() {
+    private fun finishRawClip() {
+        cancelClipWatchdog()
         playingHuman = false
+        playingAdhan = false
         activeResourceName = null
-        prefs.edit().putBoolean(KEY_PLAYING, false).apply()
+        prefs.edit().putBoolean(KEY_PLAYING, false).commit()
         releaseMediaPlayer()
+        releaseMediaSession()
         releaseWakeLock()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -317,7 +458,6 @@ class AudioAzkarPlaybackService : Service() {
                 }
             }
             engine.setSpeechRate(0.95f)
-            // اختيار صوت عربي ذكوري إن توفّر، وإلا نخفض النبرة لمحاكاة صوت رجل.
             if (!com.example.data.TtsManager.selectArabicMaleVoice(engine)) {
                 engine.setPitch(0.88f)
             } else {
@@ -330,10 +470,14 @@ class AudioAzkarPlaybackService : Service() {
                     .build()
             )
             engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                override fun onStart(utteranceId: String?) = Unit
+                override fun onStart(utteranceId: String?) {
+                    renewWakeLock()
+                }
+
                 override fun onDone(utteranceId: String?) {
                     if (chunkIndex + 1 < speechChunks.size) {
                         chunkIndex++
+                        renewWakeLock()
                         speakChunk()
                     } else {
                         stopPlayback()
@@ -380,14 +524,13 @@ class AudioAzkarPlaybackService : Service() {
         return out
     }
 
-    /** نص الإشعار: يوضّح أن التشغيل مقطع واحد وأن التالي يأتي حسب الفاصل الذي اختاره المستخدم. */
     private fun humanNotificationSnippet(index: Int): String {
         val total = HumanAzkarAudioCatalog.tracks.size
         val periodic = runCatching {
-            com.example.data.HumanAzkarScheduler.isEnabled(applicationContext)
+            HumanAzkarScheduler.isEnabled(applicationContext)
         }.getOrDefault(false)
         val minutes = runCatching {
-            com.example.data.HumanAzkarScheduler.intervalMinutes(applicationContext)
+            HumanAzkarScheduler.intervalMinutes(applicationContext)
         }.getOrDefault(0)
         return if (periodic && minutes > 0) {
             "المقطع $index من $total · التالي بعد ${formatInterval(minutes)}"
@@ -441,7 +584,7 @@ class AudioAzkarPlaybackService : Service() {
                 "تشغيل الأذكار الصوتية",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "إشعار مستمر أثناء قراءة الأذكار صوتيًا في الخلفية"
+                description = "إشعار مستمر أثناء قراءة الأذكار صوتيًا وبداية الأذان في الخلفية"
                 setSound(null, null)
                 enableVibration(false)
             }
@@ -469,7 +612,7 @@ class AudioAzkarPlaybackService : Service() {
             .putString(KEY_TITLE, title)
             .putString(KEY_TEXT, text)
             .putInt(KEY_INDEX, index)
-            .apply()
+            .commit()
     }
 
     private fun restoreFromPrefs() {
@@ -487,7 +630,13 @@ class AudioAzkarPlaybackService : Service() {
             }
             pendingText = text
             acquireWakeLock()
-            startForegroundCompat(buildNotification(pendingTitle, text.take(120)))
+            updateMediaSession(pendingTitle, playing = true)
+            runCatching {
+                startForegroundCompat(buildNotification(pendingTitle, text.take(120)))
+            }.onFailure {
+                stopPlayback()
+                return
+            }
             if (tts == null) initializeTts() else if (ready) speakPending()
         } else {
             playingHuman = true
@@ -501,11 +650,15 @@ class AudioAzkarPlaybackService : Service() {
     /* ------------------------- الإيقاف والتحرير ------------------------- */
 
     private fun stopPlayback() {
+        cancelClipWatchdog()
         playingHuman = false
+        playingAdhan = false
+        pendingText = null
         activeResourceName = null
-        prefs.edit().putBoolean(KEY_PLAYING, false).apply()
+        prefs.edit().putBoolean(KEY_PLAYING, false).commit()
         tts?.stop()
         releaseMediaPlayer()
+        releaseMediaSession()
         releaseWakeLock()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -527,18 +680,26 @@ class AudioAzkarPlaybackService : Service() {
     }
 
     /**
-     * إزالة التطبيق من قائمة التطبيقات الحديثة لا تقطع المقطع الجاري؛ الخدمة تبقى أمامية حتى نهاية المقطع.
+     * إزالة التطبيق من شاشة المهام لا تقطع التشغيل الجاري (لا البشري ولا النصي ولا الأذان)،
+     * وتُعيد تثبيت المنبهات المجدولة لضمان عدم مسحها على أجهزة الشركات المصنعة.
      */
     override fun onTaskRemoved(rootIntent: Intent?) {
-        if (!playingHuman && mediaPlayer == null) {
+        runCatching {
+            HumanAzkarScheduler.rescheduleIfEnabled(applicationContext, forceNew = false)
+            PrayerAlarmScheduler.scheduleAll(applicationContext)
+        }
+        val isActive = playingHuman || playingAdhan || !pendingText.isNullOrBlank() || mediaPlayer != null
+        if (!isActive) {
             stopPlayback()
         }
         super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
+        cancelClipWatchdog()
         activeResourceName = null
         releaseMediaPlayer()
+        releaseMediaSession()
         releaseWakeLock()
         tts?.stop()
         tts?.shutdown()
@@ -554,6 +715,8 @@ class AudioAzkarPlaybackService : Service() {
         const val EXTRA_TEXT = "com.example.extra.ATHKAR_TEXT"
         const val EXTRA_TITLE = "com.example.extra.ATHKAR_TITLE"
         const val EXTRA_AUDIO_RESOURCE_NAME = "com.example.extra.HUMAN_AZKAR_AUDIO_RESOURCE"
+        const val EXTRA_IS_ADHAN = "com.example.extra.IS_ADHAN_START"
+        const val EXTRA_SUBTITLE = "com.example.extra.ADHAN_SUBTITLE"
         const val CHANNEL_ID = "rim_athkar_playback"
         const val NOTIFICATION_ID = 7041
         private const val TAG = "AudioAzkarPlaybackService"

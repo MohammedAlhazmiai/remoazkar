@@ -25,13 +25,15 @@ class BootReceiver : BroadcastReceiver() {
         if (action == Intent.ACTION_BOOT_COMPLETED ||
             action == Intent.ACTION_MY_PACKAGE_REPLACED ||
             action == Intent.ACTION_TIME_CHANGED ||
-            action == Intent.ACTION_TIMEZONE_CHANGED
+            action == Intent.ACTION_TIMEZONE_CHANGED ||
+            action == "android.intent.action.QUICKBOOT_POWERON" ||
+            action == "com.htc.intent.action.QUICKBOOT_POWERON"
         ) {
             NotificationHelper.createChannels(context)
             ReminderScheduler.scheduleAll(context)
             PrayerAlarmScheduler.scheduleAll(context)
             AthkarReminderScheduler.syncFromMirror(context)
-            HumanAzkarScheduler.rescheduleIfEnabled(context)
+            HumanAzkarScheduler.rescheduleIfEnabled(context, forceNew = true)
             // إعادة إظهار المسبحة العائمة إن كان المستخدم قد فعّلها قبل إعادة التشغيل.
             if (FloatingTasbeehService.isEnabled(context) && FloatingTasbeehService.canDrawOverlays(context)) {
                 runCatching {

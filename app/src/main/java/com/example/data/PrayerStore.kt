@@ -81,6 +81,7 @@ object PrayerStore {
     private const val KEY_METHOD = "calc_method"
     private const val KEY_MADHAB = "asr_madhab"
     private const val KEY_NOTIF_ENABLED = "prayer_notif_enabled"
+    private const val KEY_ADHAN_SOUND_ENABLED = "prayer_adhan_start_enabled"
     private const val KEY_LEAD_MINUTES = "prayer_lead_minutes"
     private const val KEY_PRAYER_ENABLED_PREFIX = "enabled_"
     private const val KEY_MANUAL_TIME_PREFIX = "manual_time_"
@@ -146,6 +147,9 @@ object PrayerStore {
     fun isNotificationsEnabled(context: Context): Boolean =
         prefs(context).getBoolean(KEY_NOTIF_ENABLED, true)
 
+    fun isAdhanSoundEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ADHAN_SOUND_ENABLED, true)
+
     fun leadMinutes(context: Context): Int =
         prefs(context).getInt(KEY_LEAD_MINUTES, 0).coerceIn(0, 30)
 
@@ -199,6 +203,11 @@ object PrayerStore {
         prefs(context).edit().putBoolean(KEY_NOTIF_ENABLED, enabled).apply()
         revision++
         PrayerAlarmScheduler.scheduleAll(context)
+    }
+
+    fun setAdhanSoundEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_ADHAN_SOUND_ENABLED, enabled).apply()
+        revision++
     }
 
     fun setLeadMinutes(context: Context, minutes: Int) {

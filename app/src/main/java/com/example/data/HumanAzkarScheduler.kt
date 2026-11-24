@@ -5,12 +5,19 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import android.os.SystemClock
+import android.os.PowerManager
 import android.util.Log
+import com.example.MainActivity
 import com.example.receiver.HumanAzkarAlarmReceiver
 import com.example.service.AudioAzkarPlaybackService
 
-/** Schedules the user's explicitly enabled human-recorded azkar playback. */
+/**
+ * مجدول التشغيل الدوري للتسجيلات البشرية للأذكار.
+ *
+ * يستخدم AlarmManager.setAlarmClock عند توفر إذن المنبهات الدقيقة لضمان:
+ * 1) عدم تقييد التنبيهات في وضع السكون (Doze) أثناء قفل الشاشة.
+ * 2) السماح لنظام أندرويد 12+ بتشغيل خدمة الصوت في الخلفية حتى بعد إزالة التطبيق من شاشة المهام.
+ */
 object HumanAzkarScheduler {
     const val MIN_INTERVAL_MINUTES = 1
     const val MAX_INTERVAL_MINUTES = 1440
@@ -20,7 +27,9 @@ object HumanAzkarScheduler {
     private const val KEY_ENABLED = "enabled"
     private const val KEY_INTERVAL_MINUTES = "interval_minutes"
     private const val KEY_NEXT_TRACK_INDEX = "next_track_index"
+    private const val KEY_NEXT_TRIGGER_AT = "next_trigger_wall_ms"
     private const val REQUEST_CODE = 9160
+    private const val SHOW_INTENT_REQUEST_CODE = 9161
     private const val TAG = "HumanAzkarScheduler"
     const val ACTION_ALARM = "com.example.action.HUMAN_AZKAR_INTERVAL_ALARM"
 
@@ -36,16 +45,25 @@ object HumanAzkarScheduler {
         return exactAlarmAccessAllowsPlayback(Build.VERSION.SDK_INT, alarmManager.canScheduleExactAlarms())
     }
 
+    fun isIgnoringBatteryOptimizations(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true
+        val pm = context.applicationContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
+            ?: return true
+        return pm.isIgnoringBatteryOptimizations(context.packageName)
+    }
+
     internal fun exactAlarmAccessAllowsPlayback(apiLevel: Int, hasExactAlarmAccess: Boolean): Boolean =
         apiLevel < Build.VERSION_CODES.S || hasExactAlarmAccess
 
     /**
-     * Enables periodic playback only when Android can schedule the exact alarm that starts
-     * the background media service. Returns false without changing the preference if it cannot.
+     * يفعّل التشغيل الدوري عندما تتوفر صلاحية المنبه الدقيق ويُجدول الموعد القادم بـ setAlarmClock.
      */
     fun setEnabled(context: Context, enabled: Boolean): Boolean {
         if (!enabled) {
-            prefs(context).edit().putBoolean(KEY_ENABLED, false).apply()
+            prefs(context).edit()
+                .putBoolean(KEY_ENABLED, false)
+                .remove(KEY_NEXT_TRIGGER_AT)
+                .apply()
             cancel(context)
             context.stopService(Intent(context, AudioAzkarPlaybackService::class.java))
             return true
@@ -57,9 +75,12 @@ object HumanAzkarScheduler {
         }
 
         prefs(context).edit().putBoolean(KEY_ENABLED, true).apply()
-        if (scheduleNext(context)) return true
+        if (scheduleNext(context, forceNew = true)) return true
 
-        prefs(context).edit().putBoolean(KEY_ENABLED, false).apply()
+        prefs(context).edit()
+            .putBoolean(KEY_ENABLED, false)
+            .remove(KEY_NEXT_TRIGGER_AT)
+            .apply()
         cancel(context)
         return false
     }
@@ -67,30 +88,29 @@ object HumanAzkarScheduler {
     fun setIntervalMinutes(context: Context, minutes: Int) {
         val safeMinutes = minutes.coerceIn(MIN_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES)
         prefs(context).edit().putInt(KEY_INTERVAL_MINUTES, safeMinutes).apply()
-        if (isEnabled(context) && !scheduleNext(context)) cancel(context)
-    }
-
-    /** Restarts the interval after a reboot, package update, time change, or permission grant. */
-    fun rescheduleIfEnabled(context: Context): Boolean {
-        if (!isEnabled(context)) return false
-        if (!canScheduleExactAlarms(context)) {
-            // Do not replace actual audio playback with an inexact notification and imply success.
-            cancel(context)
-            return false
+        if (isEnabled(context)) {
+            scheduleNext(context, forceNew = true)
         }
-        val scheduled = scheduleNext(context)
-        if (!scheduled) cancel(context)
-        return scheduled
     }
 
-    /** Selects clips in order and wraps around after all available clips have played. */
+    /**
+     * يُعيد تثبيت المنبه القادم عند الإقلاع، استبدال الحزمة، إزالة التطبيق من المهام، أو استلام التنبيه.
+     * - عند [forceNew] = false يُحافظ على الموعد المستقبلي المخزّن إن كان صالحًا حتى لا تتأخر الدورة عند فتح التطبيق.
+     * - حتى إذا سُحبت صلاحية المنبه الدقيق لاحقًا، يُجدول احتياطيًا عبر setAndAllowWhileIdle دون إلغاء الإعداد.
+     */
+    fun rescheduleIfEnabled(context: Context, forceNew: Boolean = false): Boolean {
+        if (!isEnabled(context)) return false
+        return scheduleNext(context, forceNew = forceNew)
+    }
+
+    /** يختار المقطع التالي بالتسلسل الدوري. */
     fun takeNextTrackResource(context: Context): String {
         val sharedPrefs = prefs(context)
         val index = sharedPrefs.getInt(KEY_NEXT_TRACK_INDEX, 0)
             .coerceIn(0, HumanAzkarAudioCatalog.tracks.lastIndex)
         sharedPrefs.edit()
             .putInt(KEY_NEXT_TRACK_INDEX, (index + 1) % HumanAzkarAudioCatalog.tracks.size)
-            .apply()
+            .commit()
         return HumanAzkarAudioCatalog.trackAt(index).resourceName
     }
 
@@ -99,20 +119,58 @@ object HumanAzkarScheduler {
         alarmManager.cancel(pendingIntent(context))
     }
 
-    private fun scheduleNext(context: Context): Boolean {
+    private fun scheduleNext(context: Context, forceNew: Boolean): Boolean {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return false
-        if (!canScheduleExactAlarms(context)) return false
+        val now = System.currentTimeMillis()
+        val intervalMs = intervalMinutes(context).toLong() * 60_000L
+        val storedTrigger = prefs(context).getLong(KEY_NEXT_TRIGGER_AT, 0L)
+        val triggerAt = if (!forceNew && storedTrigger > now + 5_000L && storedTrigger <= now + intervalMs + 60_000L) {
+            storedTrigger
+        } else {
+            now + intervalMs
+        }
+        prefs(context).edit().putLong(KEY_NEXT_TRIGGER_AT, triggerAt).apply()
 
-        val triggerAt = SystemClock.elapsedRealtime() + intervalMinutes(context).toLong() * 60_000L
+        val triggerPi = pendingIntent(context)
+        val showPi = showAppPendingIntent(context)
+
+        if (canScheduleExactAlarms(context)) {
+            val alarmClockSuccess = runCatching {
+                alarmManager.setAlarmClock(
+                    AlarmManager.AlarmClockInfo(triggerAt, showPi),
+                    triggerPi
+                )
+                true
+            }.getOrElse { error ->
+                Log.w(TAG, "setAlarmClock failed, trying setExactAndAllowWhileIdle", error)
+                false
+            }
+            if (alarmClockSuccess) return true
+
+            val exactSuccess = runCatching {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAt,
+                    triggerPi
+                )
+                true
+            }.getOrElse { error ->
+                Log.e(TAG, "Could not schedule exact human-azkar alarm", error)
+                false
+            }
+            if (exactSuccess) return true
+        }
+
+        // خطة احتياطية عندما تكون صلاحية المنبه الدقيق غير متاحة مؤقتًا
         return runCatching {
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                triggerAt,
-                pendingIntent(context)
-            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, triggerPi)
+            } else {
+                alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAt, triggerPi)
+            }
             true
         }.getOrElse { error ->
-            Log.e(TAG, "Could not schedule the exact human-azkar alarm", error)
+            Log.e(TAG, "Fallback inexact human-azkar alarm failed", error)
             false
         }
     }
@@ -127,6 +185,18 @@ object HumanAzkarScheduler {
             PendingIntent.FLAG_UPDATE_CURRENT
         }
         return PendingIntent.getBroadcast(context, REQUEST_CODE, intent, flags)
+    }
+
+    private fun showAppPendingIntent(context: Context): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+        return PendingIntent.getActivity(context, SHOW_INTENT_REQUEST_CODE, intent, flags)
     }
 
     private fun prefs(context: Context) =
