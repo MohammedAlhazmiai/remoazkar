@@ -1,0 +1,54 @@
+name: Build Lite Android Release APK
+
+on:
+  push:
+    branches: [ "lite" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        ref: lite
+
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '21'
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
+
+    - name: Decode release keystore from GitHub Secrets
+      env:
+        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        KEYSTORE_PATH: ${{ runner.temp }}/my-upload-key.jks
+      run: |
+        set -euo pipefail
+        : "${KEYSTORE_BASE64:?Required GitHub Actions secret KEYSTORE_BASE64 is missing}"
+        : "${STORE_PASSWORD:?Required GitHub Actions secret STORE_PASSWORD is missing}"
+        : "${KEY_PASSWORD:?Required GitHub Actions secret KEY_PASSWORD is missing}"
+        printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+        chmod 600 "$KEYSTORE_PATH"
+
+    - name: Build Lite Release APK with Gradle
+      env:
+        STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        KEYSTORE_PATH: ${{ runner.temp }}/my-upload-key.jks
+      run: |
+        chmod +x gradlew
+        ./gradlew assembleRelease --stacktrace
+
+    - name: Upload Lite APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: lite-release-apk
+        path: app/build/outputs/apk/release/*.apk
