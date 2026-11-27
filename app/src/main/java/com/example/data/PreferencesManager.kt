@@ -54,6 +54,15 @@ data class TasbeehState(
     val vibrationEnabled: Boolean = true
 )
 
+data class QuranReaderPrefs(
+    val lastSurah: Int = 0,
+    val lastPdfPage: Int = 0,
+    val textMode: Boolean = false,
+    val themeIndex: Int = 0, // 0: عادي, 1: ورقي دافئ, 2: ليلي داكن
+    val textFontSp: Float = 26f,
+    val bookmarks: Set<String> = emptySet()
+)
+
 /**
  * معالج تلف ملف التفضيلات.
  *
@@ -132,6 +141,14 @@ class PreferencesManager(private val context: Context) {
         // --- جولة الترحيب الأولى وتعليمات المسبحة ---
         val HOME_TOUR_COMPLETED_KEY = booleanPreferencesKey("home_tour_completed")
         val TASBEEH_GUIDE_SHOWN_KEY = booleanPreferencesKey("tasbeeh_guide_shown")
+
+        // --- قارئ القرآن وآخر قراءة والعلامات المرجعية ---
+        val LAST_QURAN_SURAH_KEY = intPreferencesKey("last_quran_surah")
+        val LAST_QURAN_PDF_PAGE_KEY = intPreferencesKey("last_quran_pdf_page")
+        val QURAN_READER_TEXT_MODE_KEY = booleanPreferencesKey("quran_reader_text_mode")
+        val QURAN_READER_THEME_KEY = intPreferencesKey("quran_reader_theme")
+        val QURAN_TEXT_FONT_SP_KEY = floatPreferencesKey("quran_text_font_sp")
+        val QURAN_BOOKMARKS_KEY = stringSetPreferencesKey("quran_bookmarks")
 
         /** ملف SharedPreferences مرآة للقراءة المتزامنة من مستقبِل الإشعارات. */
         private const val MIRROR_FILE = "rim_mirror"
@@ -273,6 +290,17 @@ class PreferencesManager(private val context: Context) {
 
     val tasbeehGuideShownFlow: Flow<Boolean> = context.dataStore.safeData
         .map { preferences -> preferences[TASBEEH_GUIDE_SHOWN_KEY] ?: false }
+
+    val quranReaderPrefsFlow: Flow<QuranReaderPrefs> = context.dataStore.safeData.map { preferences ->
+        QuranReaderPrefs(
+            lastSurah = preferences[LAST_QURAN_SURAH_KEY] ?: 0,
+            lastPdfPage = preferences[LAST_QURAN_PDF_PAGE_KEY] ?: 0,
+            textMode = preferences[QURAN_READER_TEXT_MODE_KEY] ?: false,
+            themeIndex = (preferences[QURAN_READER_THEME_KEY] ?: 0).coerceIn(0, 2),
+            textFontSp = (preferences[QURAN_TEXT_FONT_SP_KEY] ?: 26f).coerceIn(18f, 48f),
+            bookmarks = preferences[QURAN_BOOKMARKS_KEY] ?: emptySet()
+        )
+    }
 
     // --- خطة ختم القرآن ---
     val khatmahDaysFlow: Flow<Int> = context.dataStore.safeData
@@ -434,6 +462,44 @@ class PreferencesManager(private val context: Context) {
     suspend fun setTasbeehGuideShown(shown: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[TASBEEH_GUIDE_SHOWN_KEY] = shown
+        }
+    }
+
+    suspend fun setLastQuranPosition(surah: Int, pdfPage: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[LAST_QURAN_SURAH_KEY] = surah.coerceAtLeast(0)
+            preferences[LAST_QURAN_PDF_PAGE_KEY] = pdfPage.coerceAtLeast(1)
+        }
+    }
+
+    suspend fun setQuranTextMode(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[QURAN_READER_TEXT_MODE_KEY] = enabled
+        }
+    }
+
+    suspend fun setQuranReaderTheme(themeIndex: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[QURAN_READER_THEME_KEY] = themeIndex.coerceIn(0, 2)
+        }
+    }
+
+    suspend fun setQuranTextFontSp(fontSp: Float) {
+        context.dataStore.edit { preferences ->
+            preferences[QURAN_TEXT_FONT_SP_KEY] = fontSp.coerceIn(18f, 48f)
+        }
+    }
+
+    suspend fun toggleQuranBookmark(page: Int, label: String) {
+        val entry = "$page|$label"
+        context.dataStore.edit { preferences ->
+            val current = preferences[QURAN_BOOKMARKS_KEY] ?: emptySet()
+            val existingSamePage = current.filter { it.startsWith("$page|") }.toSet()
+            preferences[QURAN_BOOKMARKS_KEY] = if (existingSamePage.isNotEmpty()) {
+                current - existingSamePage
+            } else {
+                current + entry
+            }
         }
     }
 }

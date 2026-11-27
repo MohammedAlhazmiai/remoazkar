@@ -499,6 +499,9 @@ private fun AppRoot(
                         onPrayerTimesClick = { navController.navigate("prayer_times") },
                         onQiblaClick = { navController.navigate("qibla") },
                         onIslamicAiClick = { navController.navigate("islamic_ai_assistant") },
+                        onResumeQuranClick = { surah, page -> navController.navigate("quran_reader/$surah/$page") },
+                        khatmahPagesDone = khatmahPagesDone,
+                        khatmahActive = khatmahActive,
                         onFloatingTasbeehClick = {
                             val intent = android.content.Intent(context, FloatingTasbeehService::class.java)
                                 .setAction(FloatingTasbeehService.ACTION_START)
@@ -575,7 +578,8 @@ private fun AppRoot(
                         onSurahClick = { surah -> navController.navigate("quran_reader/$surah/0") },
                         onPageClick = { page -> navController.navigate("quran_reader/0/$page") },
                         onSearchClick = { navController.navigate("search") },
-                        onBackClick = { navController.popBackStack() }
+                        onBackClick = { navController.popBackStack() },
+                        onResumeClick = { surah, page -> navController.navigate("quran_reader/$surah/$page") }
                     )
                 }
 

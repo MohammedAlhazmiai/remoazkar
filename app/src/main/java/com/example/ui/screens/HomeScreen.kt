@@ -43,6 +43,9 @@ import com.example.data.HisnChapter
 import com.example.data.HisnRepository
 import com.example.data.PrayerStore
 import com.example.data.PreferencesManager
+import com.example.data.PreferencesSnapshot
+import com.example.data.QuranReaderPrefs
+import com.example.data.QuranRepository
 import com.example.data.RuqyahData
 import com.example.data.TtsManager
 import com.example.ui.components.HomeOnboardingTourDialog
@@ -77,7 +80,10 @@ fun HomeScreen(
     onFloatingTasbeehClick: () -> Unit = {},
     onPrayerTimesClick: () -> Unit = {},
     onQiblaClick: () -> Unit = {},
-    onIslamicAiClick: () -> Unit = {}
+    onIslamicAiClick: () -> Unit = {},
+    onResumeQuranClick: (Int, Int) -> Unit = { _, _ -> onQuranClick() },
+    khatmahPagesDone: Int = 0,
+    khatmahActive: Boolean = false
 ) {
     val context = LocalContext.current
     val hijri = remember(HijriCalendar.offsetDays) { HijriCalendar.today() }
@@ -111,6 +117,16 @@ fun HomeScreen(
     val prefs = remember { PreferencesManager(context) }
     val scope = rememberCoroutineScope()
     val homeTourCompleted by prefs.homeTourCompletedFlow.collectAsState(initial = null as Boolean?)
+    val readerPrefs by prefs.quranReaderPrefsFlow.collectAsState(initial = QuranReaderPrefs())
+    val homeSnapshot by prefs.snapshotFlow.collectAsState(initial = PreferencesSnapshot())
+    val lastSurahName = remember(readerPrefs.lastSurah, QuranRepository.isLoaded) {
+        if (readerPrefs.lastSurah > 0) {
+            QuranRepository.ensureLoaded(context)
+            QuranRepository.surahs.firstOrNull { it.number == readerPrefs.lastSurah }?.name
+        } else {
+            null
+        }
+    }
 
     if (homeTourCompleted == false) {
         HomeOnboardingTourDialog(
@@ -257,6 +273,25 @@ fun HomeScreen(
 
             item {
                 IslamicAiHomeCard(onClick = onIslamicAiClick)
+            }
+
+            item {
+                DailyProgressHomeCard(
+                    lastSurahName = lastSurahName,
+                    lastPdfPage = readerPrefs.lastPdfPage,
+                    tasbeehTotal = homeSnapshot.tasbeehTotal,
+                    khatmahPagesDone = if (khatmahActive) khatmahPagesDone else homeSnapshot.khatmahPagesDone,
+                    khatmahActive = khatmahActive || homeSnapshot.khatmahActive,
+                    onQuranActionClick = {
+                        if (readerPrefs.lastPdfPage > 0) {
+                            onResumeQuranClick(readerPrefs.lastSurah, readerPrefs.lastPdfPage)
+                        } else {
+                            onQuranClick()
+                        }
+                    },
+                    onTasbeehClick = onTasbeehClick,
+                    onKhatmahClick = onKhatmahClick
+                )
             }
 
             item { HomeSectionTitle("الصلاة والقبلة") }
@@ -769,6 +804,136 @@ private fun IslamicAiHomeCard(onClick: () -> Unit) {
                 imageVector = Icons.Default.ChevronLeft,
                 contentDescription = "فتح المساعد الإسلامي الذكي",
                 tint = Color(0xFFFFD36A)
+            )
+        }
+    }
+}
+
+@Composable
+private fun DailyProgressHomeCard(
+    lastSurahName: String?,
+    lastPdfPage: Int,
+    tasbeehTotal: Int,
+    khatmahPagesDone: Int,
+    khatmahActive: Boolean,
+    onQuranActionClick: () -> Unit,
+    onTasbeehClick: () -> Unit,
+    onKhatmahClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("home_daily_progress_card"),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xE613352B)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    tint = Color(0xFFFFD36A),
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "متابعة القراءة وإنجازك اليومي",
+                    color = Color(0xFFFFF4D4),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val quranTitle = if (lastPdfPage > 0) "متابعة القرآن" else "المصحف"
+                val quranSub = when {
+                    lastPdfPage > 0 && !lastSurahName.isNullOrBlank() -> "$lastSurahName • ص $lastPdfPage"
+                    lastPdfPage > 0 -> "صفحة $lastPdfPage"
+                    else -> "ابدأ القراءة"
+                }
+                DailyStatChip(
+                    title = quranTitle,
+                    value = quranSub,
+                    icon = Icons.Default.MenuBook,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("home_progress_quran_chip"),
+                    onClick = onQuranActionClick
+                )
+                DailyStatChip(
+                    title = "التسبيح",
+                    value = "$tasbeehTotal تسبيحة",
+                    icon = Icons.Default.TouchApp,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("home_progress_tasbeeh_chip"),
+                    onClick = onTasbeehClick
+                )
+                DailyStatChip(
+                    title = "الختمة",
+                    value = if (khatmahActive) "$khatmahPagesDone/604" else "ابدأ ختمة",
+                    icon = Icons.Default.EventAvailable,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("home_progress_khatmah_chip"),
+                    onClick = onKhatmahClick
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DailyStatChip(
+    title: String,
+    value: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier
+            .heightIn(min = 56.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick),
+        color = Color(0x33FFFFFF),
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = Color(0xFFFFD36A),
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = title,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 11.sp,
+                maxLines = 1
+            )
+            Text(
+                text = value,
+                color = Color(0xFFD8EBE0),
+                fontSize = 10.sp,
+                maxLines = 1,
+                textAlign = TextAlign.Center
             )
         }
     }
