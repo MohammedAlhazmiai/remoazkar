@@ -214,7 +214,7 @@ object NotificationHelper {
             return
         }
 
-        // خطة احتياطية مباشرة لنطق بداية الأذان (3.2 ثانية) إذا قيّد النظام تشغيل الخدمة الخلفية
+        // خطة احتياطية مباشرة لتشغيل صوت الأذان للصلوات الخمس إذا قيّد النظام تشغيل الخدمة الخلفية
         thread(start = true, name = "AdhanStartFallbackPlayer") {
             val doneLatch = CountDownLatch(1)
             var mp: MediaPlayer? = null
@@ -240,7 +240,9 @@ object NotificationHelper {
                     start()
                 }
                 mp = player
-                doneLatch.await(8, TimeUnit.SECONDS)
+                val durationMs = runCatching { player.duration.toLong() }.getOrDefault(30_000L)
+                val waitMs = if (durationMs > 0L) (durationMs + 8_000L).coerceIn(30_000L, 60_000L) else 45_000L
+                doneLatch.await(waitMs, TimeUnit.MILLISECONDS)
             } catch (e: Exception) {
                 Log.e(TAG, "Direct Adhan-start playback failed", e)
             } finally {

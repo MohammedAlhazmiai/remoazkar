@@ -24,7 +24,8 @@ object QuranHadithRetriever {
     ): List<EvidenceCitation> {
         if (QuranRepository.ayahs.isEmpty()) return emptyList()
         val indexed = ArabicNlpEngine.indexText(query)
-        val stems = indexed.stems.filter { it.length >= 2 }
+        val contentStems = ArabicNlpEngine.extractContentStems(indexed)
+        val stems = contentStems.ifEmpty { indexed.stems.filter { it.length >= 2 }.toSet() }
         if (stems.isEmpty()) return emptyList()
 
         val scored = ArrayList<Pair<Double, EvidenceCitation>>()
@@ -41,18 +42,20 @@ object QuranHadithRetriever {
             for (word in ayahWords) {
                 val wStem = ArabicNlpEngine.lightStem(word)
                 if (wStem in stems) hits++
-                if (word in indexed.tokens) exactTokenHits++
+                if (word in indexed.tokens && wStem !in ArabicNlpEngine.DOMAIN_META_STEMS) exactTokenHits++
             }
             if (hits == 0 && exactTokenHits == 0) continue
 
             var score = hits * 3.0 + exactTokenHits * 2.5
             // Prefer concise, clear verses for citation readability
             if (ayah.text.length in 30..240) score += 2.0
-            scored += score to EvidenceCitation(
-                label = "القرآن الكريم",
-                text = "﴿${ayah.text}﴾",
-                source = source
-            )
+            if (score >= 5.0) {
+                scored += score to EvidenceCitation(
+                    label = "القرآن الكريم",
+                    text = "﴿${ayah.text}﴾",
+                    source = source
+                )
+            }
         }
 
         return scored

@@ -39,10 +39,10 @@ object ArabicNlpEngine {
         "هم", "هن", "انا", "اني", "انني", "نحن", "انت", "انتم", "هذا", "هذه", "ذلك", "تلك", "التي", "الذي",
         "الذين", "كل", "بعض", "غير", "عند", "بعد", "قبل", "بين", "تحت", "فوق", "حول", "ضد",
         "لي", "لك", "له", "لها", "لهم", "لنا", "منه", "منها", "فيه", "فيها", "عليه", "عليها",
-        "اكتب", "اكتبلي", "اكتبي", "اريد", "ابغي", "ابغا", "ابي", "عايز", "عاوز", "ودي",
-        "ممكن", "لو", "سمحت", "فضلك", "رجاء", "اعطني", "اخبرني", "اشرح", "وضح", "حدثني",
-        "قل", "قول", "شيء", "بشكل", "جدا", "بس", "وش", "ايش", "شو", "ليش", "عشان",
-        "حلمت", "رايت", "احلم", "منام", "البارحه", "شاهدت"
+        "اكتب", "اكتبلي", "اكتبي", "اريد", "بغيت", "ابغي", "ابغا", "ابي", "عايز", "عاوز", "ودي", "بدي",
+        "سوي", "اعمل", "هات", "ممكن", "لو", "سمحت", "فضلك", "رجاء", "اعطني", "عطني", "اخبرني", "اشرح", "وضح", "حدثني",
+        "قل", "قول", "قولي", "شيء", "بشكل", "جدا", "بس", "وش", "ايش", "شو", "شلون", "ليش", "عشان", "بالله",
+        "حلمت", "رايت", "احلم", "منام", "نومي", "البارحه", "شاهدت"
     )
 
     /**
@@ -50,9 +50,9 @@ object ArabicNlpEngine {
      * لا تكفي وحدها لإثبات تطابق الموضوع إذا لم يتطابق المحتوى الفعلي للسؤال.
      */
     val DOMAIN_META_STEMS = setOf(
-        "تفسير", "فسر", "تعبير", "حلم", "احلام", "رويا", "روي", "منام",
+        "تفسير", "فسر", "تعبير", "حلم", "احلام", "رويا", "روي", "منام", "نوم",
         "حكم", "احكام", "فتو", "فتوي", "فقه", "يجوز", "حلال", "حرام", "شرع", "شرعا",
-        "دليل", "ادله", "خطب", "خطبه", "رسال", "رساله", "خاطر", "خاطره",
+        "دليل", "ادله", "خطب", "خطبه", "رسال", "رساله", "خاطر", "خاطره", "خواطر",
         "محاضر", "محاضره", "درس", "سوال", "استفسار", "موضوع", "مسال", "مساله",
         "مساعد", "خدم", "مهام", "تقدم", "تستطيع", "تقدر", "كيفيه"
     )
@@ -80,18 +80,38 @@ object ArabicNlpEngine {
     private fun bridgeColloquialForms(norm: String): String {
         var s = " $norm "
         s = s.replace(" فسرلي ", " فسر لي ")
+            .replace(" تفسرلي ", " تفسر لي ")
+            .replace(" تشرحلي ", " تشرح لي ")
             .replace(" اكتبلي ", " اكتب لي ")
+            .replace(" تحضرلي ", " تحضر لي ")
+            .replace(" سويلي ", " اكتب لي ")
+            .replace(" سوي لي ", " اكتب لي ")
             .replace(" اعطيني ", " اعطني ")
+            .replace(" عطني ", " اعطني ")
+            .replace(" هات لي ", " اعطني ")
             .replace(" قولي ", " قل لي ")
             .replace(" علمني ", " اخبرني ")
+            .replace(" بغيت ", " اريد ")
+            .replace(" ابغي ", " اريد ")
+            .replace(" ابغا ", " اريد ")
+            .replace(" بدي ", " اريد ")
+            .replace(" عاوز ", " اريد ")
+            .replace(" عايز ", " اريد ")
             .replace(" وش حكم ", " ما حكم ")
             .replace(" ايش حكم ", " ما حكم ")
             .replace(" شو حكم ", " ما حكم ")
+            .replace(" وش رايك في ", " ما حكم ")
+            .replace(" ايش رايك في ", " ما حكم ")
             .replace(" وش تفسير ", " ما تفسير ")
             .replace(" ايش تفسير ", " ما تفسير ")
             .replace(" شو تفسير ", " ما تفسير ")
+            .replace(" وش معني ", " ما معني ")
+            .replace(" ايش معني ", " ما معني ")
             .replace(" حلمتلك ", " حلمت ")
             .replace(" شفت في المنام ", " رايت في المنام ")
+            .replace(" شفت في نومي ", " رايت في المنام ")
+            .replace(" رايت في نومي ", " رايت في المنام ")
+            .replace(" حلمت في نومي ", " رايت في المنام ")
             .replace(" تحلمت ", " حلمت ")
         return MULTI_SPACE.replace(s, " ").trim()
     }
@@ -154,7 +174,10 @@ object ArabicNlpEngine {
             val isFollowUpPhrase = FOLLOW_UP_SIGNALS.any { norm.contains(it) } ||
                 ((norm.contains("اخر") || norm.contains("اخري") || norm.contains("اضافي")) &&
                     (norm.contains("دليل") || norm.contains("ايه") || norm.contains("حديث") || norm.contains("شاهد")))
-            val isExplicitNewDomain = norm.contains("حلمت") || norm.contains("ما حكم") || norm.contains("تفسير حلم")
+            val isExplicitNewDomain = norm.contains("حلمت") || norm.contains("ما حكم") ||
+                norm.contains("هل يجوز") || norm.contains("تفسير حلم") || norm.contains("ما تفسير") ||
+                norm.contains("خطبه") || norm.contains("محاضره") || norm.contains("رساله") ||
+                norm.contains("خاطره") || norm.contains("صمم")
             if (isFollowUpPhrase && !isExplicitNewDomain) return IslamicIntent.FOLLOW_UP
         }
 
@@ -174,12 +197,12 @@ object ArabicNlpEngine {
             return bestRule.key
         }
 
-        if (hasPriorContext && norm.length < 28 && tokens.size <= 4) {
+        if (hasPriorContext && norm.length < 24 && tokens.size <= 3) {
             return IslamicIntent.FOLLOW_UP
         }
 
         val isQuestionForm = norm.startsWith("هل ") || norm.startsWith("ما ") || norm.startsWith("كم ") ||
-            norm.startsWith("متي ") || norm.startsWith("كيف ") || norm.startsWith("لماذا ")
+            norm.startsWith("متي ") || norm.startsWith("كيف ") || norm.startsWith("لماذا ") || norm.startsWith("ماهي ")
         val neuralProbs = NeuralArabicLanguageCore.classifyIntentDistribution(query)
         val filteredNeural = if (isQuestionForm) {
             neuralProbs.filterKeys {
@@ -201,7 +224,7 @@ object ArabicNlpEngine {
         for (signal in signals) {
             if (norm == signal) score += exactBonus * 2
             else if (" $norm ".contains(" $signal ")) score += exactBonus
-            else if (norm.contains(signal)) score += (exactBonus - 1).coerceAtLeast(1)
+            else if (signal.length >= 4 && norm.contains(signal)) score += (exactBonus - 1).coerceAtLeast(1)
         }
         return score
     }
@@ -343,7 +366,7 @@ object ArabicNlpEngine {
 
     private val DREAM_SIGNALS = listOf(
         "حلم", "حلمت", "احلام", "تفسير حلم", "تفسير الاحلام", "رؤيا", "رويا", "رايت في المنام",
-        "في المنام", "منام", "كابوس", "تعبير الرؤيا", "ابن سيرين", "النابلسي"
+        "في المنام", "في الحلم", "منام", "نومي", "كابوس", "تعبير الرؤيا", "ابن سيرين", "النابلسي"
     )
 
     private val KHUTBAH_SIGNALS = listOf(
@@ -367,14 +390,17 @@ object ArabicNlpEngine {
         "ما حكم", "هل يجوز", "حكم", "فتوي", "فتوى", "فقه", "فقهيه", "يفطر", "تفطر", "مفطرات",
         "الصيام", "صيام", "الصايم", "صايم", "بخاخ الربو", "قطره العين",
         "ينقض", "نواقض", "كفاره", "كفارة", "زكاه", "زكاة", "نصاب", "قصر", "جمع",
-        "سجود السهو", "مسح علي الخفين", "تيمم", "غسل", "جنابه", "حيض", "طلاق", "ربا",
-        "تورق", "بطاقه ائتمانيه", "نذر", "يمين", "اضحيه", "قضاء الصيام", "فوائد البنوك",
+        "سجود السهو", "مسح علي الخفين", "جوربين", "خفين", "تيمم", "غسل", "جنابه", "حيض", "نفاس",
+        "طلاق", "خلع", "عده", "ربا", "تورق", "بطاقه ائتمانيه", "اسهم", "عملات رقميه",
+        "نذر", "يمين", "اضحيه", "عقيقه", "قضاء الصيام", "فوائد البنوك",
+        "استخاره", "ضحي", "تراويح", "وتر", "عمره", "حج", "ميقات", "طواف",
         "شروط الصلاه", "اركان الصلاه", "واجبات الصلاه", "مبطلات الصلاه", "نجاسه", "وسوسه", "ميراث", "دين"
     )
 
     private val QA_SIGNALS = listOf(
         "دليل", "استدلال", "ايه قرانيه", "حديث", "حديث نبوي", "فضل", "معني", "ما هي اركان",
-        "سوره", "تفسير ايه", "دعاء", "السيره", "الصحابه", "قصه"
+        "اركان الايمان", "اركان الاسلام", "سوره", "تفسير ايه", "تفسير سوره", "دعاء", "السيره",
+        "الصحابه", "قصه", "علامات الساعه", "عذاب القبر", "الشفاعه"
     )
 
     private val IMAGE_DESIGN_SIGNALS = listOf(

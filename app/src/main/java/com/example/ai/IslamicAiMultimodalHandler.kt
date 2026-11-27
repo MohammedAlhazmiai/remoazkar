@@ -112,13 +112,13 @@ object IslamicAiMultimodalHandler {
         val matchedEntry = findBestEntryForQuery(query, entries)
         val text = buildString {
             append("**استلام الصورة المرفقة ($inspection) في الوضع غير المتصل بالإنترنت:**\n\n")
-            append("تم استلام ملف الصورة بنجاح. يتطلب الفهم البصري الدقيق لمحتوى الصورة وتفاصيلها اتصالًا بالإنترنت لتشغيل نموذج الرؤية السحابي (Gemini Vision)، أما أثناء العمل بدون إنترنت فإليك المساعدة المتاحة محليًا:\n\n")
+            append("تم استلام ملف الصورة بنجاح، ولكن التطبيق حاليًا في وضع عدم الاتصال بالإنترنت؛ **يرجى تشغيل الإنترنت** وإعادة إرسال الصورة ليقرأ نموذج الرؤية الذكي محتواها بالكامل ويحلّلها بدقة.\n\n")
             if (matchedEntry != null) {
                 append("• **بناءً على سؤالك («$query») — ${matchedEntry.title}:**\n${matchedEntry.content}\n\n")
                 if (matchedEntry.quranEvidence.isNotBlank()) append("• **الدليل القرآني:** ${matchedEntry.quranEvidence}\n")
                 if (matchedEntry.hadithEvidence.isNotBlank()) append("• **الدليل النبوي:** ${matchedEntry.hadithEvidence}\n")
             } else {
-                append("• إذا كانت الصورة تحتوي على نص قرآني أو مسألة شرعية، اكتب فحوى ما فيها أو اتصل بالإنترنت وأعد إرسالها ليقرأها المساعد الذكي تلقائيًا بالكامل.\n")
+                append("• يمكنك أيضًا كتابة النص أو السؤال الموجود في الصورة نصيًا لإجابتك محليًا فورًا.\n")
                 append("• قال الله تعالى: ﴿ذَٰلِكَ وَمَن يُعَظِّمْ شَعَائِرَ اللَّهِ فَإِنَّهَا مِن تَقْوَى الْقُلُوبِ﴾ [الحج: 32].")
             }
         }.trim()
@@ -147,13 +147,13 @@ object IslamicAiMultimodalHandler {
         val matchedEntry = findBestEntryForQuery(query, entries)
         val text = buildString {
             append("**استلام الملف الصوتي ($inspection) في الوضع غير المتصل بالإنترنت:**\n\n")
-            append("تم حفظ وقراءة بيانات الملف الصوتي بنجاح. يتطلب الاستماع الذكي لمحتوى التسجيل الصوتي وفهم التلاوة أو السؤال بالعامية داخل الملف اتصالًا بالإنترنت لتشغيل نموذج الصوت السحابي (Gemini Multimodal).\n\n")
+            append("تم حفظ وقراءة بيانات الملف الصوتي بنجاح، ولكن التطبيق حاليًا في وضع عدم الاتصال بالإنترنت؛ **يرجى تشغيل الإنترنت** وإعادة إرسال التسجيل ليستمع إليه المساعد الذكي ويفهم ما فيه بدقة.\n\n")
             if (matchedEntry != null) {
                 append("• **بناءً على النص المرافق («$query») — ${matchedEntry.title}:**\n${matchedEntry.content}\n\n")
                 if (matchedEntry.quranEvidence.isNotBlank()) append("• **الشاهد القرآني:** ${matchedEntry.quranEvidence}\n")
                 if (matchedEntry.hadithEvidence.isNotBlank()) append("• **الشاهد النبوي:** ${matchedEntry.hadithEvidence}\n")
             } else {
-                append("• أثناء عدم توفر الإنترنت يمكنك الضغط على **زر المايك** للتحدث مباشرة وتحويل صوتك إلى نص فوري يفهمه المساعد المحلي فورًا، أو توصيل الإنترنت وإعادة إرسال التسجيل الصوتي.\n")
+                append("• يمكنك أيضًا الضغط على **زر المايك** للتحدث مباشرة وتحويل صوتك إلى نص فوري يفهمه المساعد المحلي فورًا.\n")
                 append("• قال الله تعالى: ﴿فَاسْأَلُوا أَهْلَ الذِّكْرِ إِن كُنتُمْ لَا تَعْلَمُونَ﴾ [النحل: 43].")
             }
         }.trim()

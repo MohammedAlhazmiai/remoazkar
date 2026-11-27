@@ -129,6 +129,10 @@ class PreferencesManager(private val context: Context) {
         val PAGE_COLOR_KEY = longPreferencesKey("page_color_argb")
         val FONT_COLOR_KEY = longPreferencesKey("font_color_argb")
 
+        // --- جولة الترحيب الأولى وتعليمات المسبحة ---
+        val HOME_TOUR_COMPLETED_KEY = booleanPreferencesKey("home_tour_completed")
+        val TASBEEH_GUIDE_SHOWN_KEY = booleanPreferencesKey("tasbeeh_guide_shown")
+
         /** ملف SharedPreferences مرآة للقراءة المتزامنة من مستقبِل الإشعارات. */
         private const val MIRROR_FILE = "rim_mirror"
         private const val MIRROR_NOTIFICATION_SOUND = "notification_sound"
@@ -263,6 +267,12 @@ class PreferencesManager(private val context: Context) {
 
     val tashkeelFlow: Flow<Boolean> = context.dataStore.safeData
         .map { preferences -> preferences[TASHKEEL_KEY] ?: true }
+
+    val homeTourCompletedFlow: Flow<Boolean> = context.dataStore.safeData
+        .map { preferences -> preferences[HOME_TOUR_COMPLETED_KEY] ?: false }
+
+    val tasbeehGuideShownFlow: Flow<Boolean> = context.dataStore.safeData
+        .map { preferences -> preferences[TASBEEH_GUIDE_SHOWN_KEY] ?: false }
 
     // --- خطة ختم القرآن ---
     val khatmahDaysFlow: Flow<Int> = context.dataStore.safeData
@@ -413,5 +423,17 @@ class PreferencesManager(private val context: Context) {
             preferences[AZKAR_TIME_MINUTE_KEY] = m
         }) return
         mirrorAzkarSettings(context, isAutoRemindersEnabled(context), reminderInterval(context), h, m)
+    }
+
+    suspend fun setHomeTourCompleted(completed: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[HOME_TOUR_COMPLETED_KEY] = completed
+        }
+    }
+
+    suspend fun setTasbeehGuideShown(shown: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[TASBEEH_GUIDE_SHOWN_KEY] = shown
+        }
     }
 }

@@ -44,10 +44,11 @@ object IslamicAiModel {
             return it
         }
 
-        // الاستعلام التوليدي السحابي المتقدم عبر Firebase AI Logic (Gemini) عند توفر الإنترنت
+        // الاستعلام التوليدي السحابي المتقدم عبر Firebase AI Logic (Gemini Flash-Lite) عند توفر الإنترنت
+        var isOffline = context == null || !FirebaseAiEngine.isNetworkAvailable(context)
         if (context != null && (cleanQuery.isNotBlank() || userAttachmentType.isNotBlank())) {
-            val generativeText = try {
-                FirebaseAiEngine.generateGenerativeReply(
+            val cloudResult = try {
+                FirebaseAiEngine.generateGenerativeResult(
                     context = context,
                     query = cleanQuery,
                     attachmentType = userAttachmentType,
@@ -57,15 +58,24 @@ object IslamicAiModel {
             } catch (ce: kotlinx.coroutines.CancellationException) {
                 throw ce
             } catch (_: Throwable) {
-                null
+                FirebaseAiEngine.CloudReplyResult(text = null, isOffline = isOffline, attemptedCloud = false)
             }
+            isOffline = cloudResult.isOffline
 
-            buildCloudResponseIfValid(cleanQuery, userAttachmentType, generativeText)?.let {
+            buildCloudResponseIfValid(cleanQuery, userAttachmentType, cloudResult.text)?.let {
                 return it
             }
         }
 
-        return generateOfflineFallbackReply(cleanQuery, entries, recentMessages, context, userAttachmentType, userAttachmentUri)
+        return generateOfflineFallbackReply(
+            cleanQuery = cleanQuery,
+            entries = entries,
+            recentMessages = recentMessages,
+            context = context,
+            userAttachmentType = userAttachmentType,
+            userAttachmentUri = userAttachmentUri,
+            isOffline = isOffline
+        )
     }
 
     fun generateReply(
@@ -82,11 +92,12 @@ object IslamicAiModel {
             return it
         }
 
-        // الاستعلام التوليدي السحابي المتقدم عبر Firebase AI Logic (Gemini) عند توفر الإنترنت (للنداءات المتزامنة)
+        // الاستعلام التوليدي السحابي المتقدم عبر Firebase AI Logic (Gemini Flash-Lite) عند توفر الإنترنت (للنداءات المتزامنة)
+        var isOffline = context == null || !FirebaseAiEngine.isNetworkAvailable(context)
         if (context != null && (cleanQuery.isNotBlank() || userAttachmentType.isNotBlank())) {
-            val generativeText = runCatching {
+            val cloudResult = runCatching {
                 kotlinx.coroutines.runBlocking {
-                    FirebaseAiEngine.generateGenerativeReply(
+                    FirebaseAiEngine.generateGenerativeResult(
                         context = context,
                         query = cleanQuery,
                         attachmentType = userAttachmentType,
@@ -95,13 +106,23 @@ object IslamicAiModel {
                     )
                 }
             }.getOrNull()
-
-            buildCloudResponseIfValid(cleanQuery, userAttachmentType, generativeText)?.let {
-                return it
+            if (cloudResult != null) {
+                isOffline = cloudResult.isOffline
+                buildCloudResponseIfValid(cleanQuery, userAttachmentType, cloudResult.text)?.let {
+                    return it
+                }
             }
         }
 
-        return generateOfflineFallbackReply(cleanQuery, entries, recentMessages, context, userAttachmentType, userAttachmentUri)
+        return generateOfflineFallbackReply(
+            cleanQuery = cleanQuery,
+            entries = entries,
+            recentMessages = recentMessages,
+            context = context,
+            userAttachmentType = userAttachmentType,
+            userAttachmentUri = userAttachmentUri,
+            isOffline = isOffline
+        )
     }
 
     private fun generatePreCloudReply(
@@ -194,7 +215,8 @@ object IslamicAiModel {
         recentMessages: List<AiMessageEntity>,
         context: Context?,
         userAttachmentType: String,
-        userAttachmentUri: String
+        userAttachmentUri: String,
+        isOffline: Boolean = true
     ): IslamicAiResponse {
         // 5. الدردشة اليومية الودية المحلية عند العمل بدون إنترنت
         if (userAttachmentType.isBlank() && cleanQuery.isNotBlank()) {
@@ -232,14 +254,14 @@ object IslamicAiModel {
             IslamicIntent.GREETING -> greetingResponse()
             IslamicIntent.APPRECIATION -> appreciationResponse()
             IslamicIntent.IMAGE_DESIGN -> IslamicAiMultimodalHandler.composeImageDesignReply(cleanQuery, context, entries)
-            IslamicIntent.FOLLOW_UP -> handleFollowUp(cleanQuery, entries, lastUserMsg, lastAssistantMsg)
-            IslamicIntent.DREAMS -> composeDreamReply(cleanQuery, entries)
-            IslamicIntent.LETTER -> composeCreativeReply(cleanQuery, IslamicIntent.LETTER, "letters", entries)
-            IslamicIntent.KHATIRA -> composeCreativeReply(cleanQuery, IslamicIntent.KHATIRA, "khawatir", entries)
-            IslamicIntent.KHUTBAH -> composeCreativeReply(cleanQuery, IslamicIntent.KHUTBAH, "khutbah", entries)
-            IslamicIntent.LECTURE -> composeCreativeReply(cleanQuery, IslamicIntent.LECTURE, "lecture", entries)
-            IslamicIntent.FATWA -> composeKnowledgeReply(cleanQuery, IslamicIntent.FATWA, "fatwa", entries)
-            IslamicIntent.CHAT_QA -> composeKnowledgeReply(cleanQuery, IslamicIntent.CHAT_QA, "chat_qa", entries)
+            IslamicIntent.FOLLOW_UP -> handleFollowUp(cleanQuery, entries, lastUserMsg, lastAssistantMsg, isOffline)
+            IslamicIntent.DREAMS -> composeDreamReply(cleanQuery, entries, isOffline)
+            IslamicIntent.LETTER -> composeCreativeReply(cleanQuery, IslamicIntent.LETTER, "letters", entries, isOffline)
+            IslamicIntent.KHATIRA -> composeCreativeReply(cleanQuery, IslamicIntent.KHATIRA, "khawatir", entries, isOffline)
+            IslamicIntent.KHUTBAH -> composeCreativeReply(cleanQuery, IslamicIntent.KHUTBAH, "khutbah", entries, isOffline)
+            IslamicIntent.LECTURE -> composeCreativeReply(cleanQuery, IslamicIntent.LECTURE, "lecture", entries, isOffline)
+            IslamicIntent.FATWA -> composeKnowledgeReply(cleanQuery, IslamicIntent.FATWA, "fatwa", entries, isOffline)
+            IslamicIntent.CHAT_QA -> composeKnowledgeReply(cleanQuery, IslamicIntent.CHAT_QA, "chat_qa", entries, isOffline)
         }
     }
 
@@ -279,7 +301,8 @@ object IslamicAiModel {
         query: String,
         entries: List<CorpusEntry>,
         lastUserMsg: AiMessageEntity?,
-        lastAssistantMsg: AiMessageEntity?
+        lastAssistantMsg: AiMessageEntity?,
+        isOffline: Boolean = true
     ): IslamicAiResponse {
         val norm = ArabicNlpEngine.normalize(query)
         val priorTopic = lastUserMsg?.content.orEmpty()
@@ -357,17 +380,21 @@ object IslamicAiModel {
 
         val combinedIntent = ArabicNlpEngine.detectIntent(combinedTopicQuery, hasPriorContext = false)
         return when (combinedIntent) {
-            IslamicIntent.DREAMS -> composeDreamReply(combinedTopicQuery, entries)
-            IslamicIntent.LETTER -> composeCreativeReply(combinedTopicQuery, IslamicIntent.LETTER, "letters", entries)
-            IslamicIntent.KHATIRA -> composeCreativeReply(combinedTopicQuery, IslamicIntent.KHATIRA, "khawatir", entries)
-            IslamicIntent.KHUTBAH -> composeCreativeReply(combinedTopicQuery, IslamicIntent.KHUTBAH, "khutbah", entries)
-            IslamicIntent.LECTURE -> composeCreativeReply(combinedTopicQuery, IslamicIntent.LECTURE, "lecture", entries)
-            IslamicIntent.FATWA -> composeKnowledgeReply(combinedTopicQuery, IslamicIntent.FATWA, "fatwa", entries)
-            else -> composeKnowledgeReply(combinedTopicQuery, IslamicIntent.CHAT_QA, "chat_qa", entries)
+            IslamicIntent.DREAMS -> composeDreamReply(combinedTopicQuery, entries, isOffline)
+            IslamicIntent.LETTER -> composeCreativeReply(combinedTopicQuery, IslamicIntent.LETTER, "letters", entries, isOffline)
+            IslamicIntent.KHATIRA -> composeCreativeReply(combinedTopicQuery, IslamicIntent.KHATIRA, "khawatir", entries, isOffline)
+            IslamicIntent.KHUTBAH -> composeCreativeReply(combinedTopicQuery, IslamicIntent.KHUTBAH, "khutbah", entries, isOffline)
+            IslamicIntent.LECTURE -> composeCreativeReply(combinedTopicQuery, IslamicIntent.LECTURE, "lecture", entries, isOffline)
+            IslamicIntent.FATWA -> composeKnowledgeReply(combinedTopicQuery, IslamicIntent.FATWA, "fatwa", entries, isOffline)
+            else -> composeKnowledgeReply(combinedTopicQuery, IslamicIntent.CHAT_QA, "chat_qa", entries, isOffline)
         }
     }
 
-    private fun composeDreamReply(query: String, entries: List<CorpusEntry>): IslamicAiResponse {
+    private fun composeDreamReply(
+        query: String,
+        entries: List<CorpusEntry>,
+        isOffline: Boolean = true
+    ): IslamicAiResponse {
         val dreamEntries = entries.filter { it.domain == "dreams" }
         val ranked = rankEntries(query, dreamEntries, targetDomain = null)
             .filter { it.second >= 4.5 }
@@ -392,11 +419,15 @@ object IslamicAiModel {
             } else {
                 if (requestedDreamSubject.isNotBlank()) {
                     append("بخصوص سؤالك عن تفسير: **«$requestedDreamSubject»** في المنام:\n")
-                    append("لم يرد نصٌّ تفصيلي مطابق تمامًا لهذا الرمز في القاموس المحلي غير المتصل بالإنترنت، ومن الأمانة ألا نبدّله برمزٍ آخر لم تره.\n\n")
+                }
+                if (isOffline) {
+                    append("التطبيق يعمل الآن في وضع عدم الاتصال بالإنترنت، ولم يرد نصٌّ تفصيلي مطابق تمامًا لهذا الرمز في القاموس المحلي، ومن الأمانة ألا نبدّله برمزٍ آخر لم تره.\n\n")
+                    append("**يرجى تشغيل الإنترنت** وإعادة إرسال سؤالك ليتمكن المساعد الذكي السحابي من تحليل الرمز وسياقه كاملًا بدقة وواقعية.\n\n")
+                } else {
+                    append("لم يرد نصٌّ تفصيلي مطابق تمامًا لهذا الرمز في القاموس المحلي، وتعذّر الوصول المؤقت للخادم السحابي.\n\n")
                 }
                 if (rulesEntry != null) {
                     append(rulesEntry.content)
-                    append("\n\n**كيف تحصل على أدق تعبير:**\nاذكر تفاصيل أكثر حول ما رأيت (المكان، الأشخاص، شعورك أثناء المنام)، أو اتصل بالإنترنت ليحلّل نموذج الذكاء التوليدي الرمز وسياقه كاملًا بدقة.")
                 }
             }
 
@@ -425,10 +456,11 @@ object IslamicAiModel {
 
     private fun extractDreamSubject(query: String): String {
         val cleaned = query.trim()
-            .replace(Regex("^(فسر لي|فسرلي|ما تفسير|تفسير|تعبير|حلمت بـ|حلمت ب|حلمت أني|حلمت اني|حلمت|رأيت في المنام|رايت في المنام|رأيت|حلم|رؤيا)\\s*"), "")
-            .replace(Regex("^(عن|في|من|حلم|رؤيا|منام)\\s+"), "")
+            .replace(Regex("^(ممكن\\s+|لو سمحت\\s+|بالله\\s+|يا شيخ\\s+)?(تفسر لي|تفسرلي|فسر لي|فسرلي|ما تفسير|تفسير|تعبير|حلمت بـ|حلمت ب|حلمت أني|حلمت اني|حلمت|رأيت في المنام|رايت في المنام|رأيت في نومي|رايت في نومي|شفت في نومي|رأيت|رايت|حلم|رؤيا)\\s*"), "")
+            .replace(Regex("^(عن|في|من|بـ|ب|حلم|رؤيا|منام)\\s+"), "")
             .replace("في المنام", "")
             .replace("في الحلم", "")
+            .replace("في نومي", "")
             .trim()
         return if (cleaned.length >= 2) cleaned else ""
     }
@@ -437,7 +469,8 @@ object IslamicAiModel {
         query: String,
         intent: IslamicIntent,
         domain: String,
-        entries: List<CorpusEntry>
+        entries: List<CorpusEntry>,
+        isOffline: Boolean = true
     ): IslamicAiResponse {
         val domainEntries = entries.filter { it.domain == domain }
         val bestPair = rankEntries(query, domainEntries, targetDomain = domain).firstOrNull()
@@ -452,7 +485,12 @@ object IslamicAiModel {
         val text = if (best != null && bestScore >= 7.5 && !needsCustomTopicSynthesis(query, best)) {
             buildAdaptedTemplate(query, best, liveQuran, liveHadith)
         } else {
-            synthesizeCustomComposition(intent, topicPhrase, norm, best, liveQuran, liveHadith)
+            buildString {
+                append(synthesizeCustomComposition(intent, topicPhrase, norm, best, liveQuran, liveHadith))
+                if (isOffline) {
+                    append("\n\n*ملاحظة: تمت الصياغة محليًا بدون إنترنت؛ يمكنك تشغيل الإنترنت للحصول على صياغة سحابية موسّعة ومخصّصة أكثر لتفاصيل طلبك.*")
+                }
+            }.trim()
         }
 
         val refs = buildList {
@@ -474,29 +512,32 @@ object IslamicAiModel {
         query: String,
         intent: IslamicIntent,
         preferredDomain: String,
-        entries: List<CorpusEntry>
+        entries: List<CorpusEntry>,
+        isOffline: Boolean = true
     ): IslamicAiResponse {
         val ranked = rankEntries(query, entries, targetDomain = preferredDomain)
         val topPair = ranked.firstOrNull()
         val top = topPair?.first
         val topScore = topPair?.second ?: 0.0
 
+        val topMatch = top?.takeIf { isStrongKnowledgeMatch(query, it, topScore) }
+
         val liveQuran = QuranHadithRetriever.findQuranCitations(query, limit = 2)
         val liveHadith = QuranHadithRetriever.findHadithAndDuaCitations(query, limit = 2)
 
         val text = buildString {
-            if (top != null && topScore >= 5.5) {
-                append("**${top.title}**\n\n")
-                append(top.content)
+            if (topMatch != null) {
+                append("**${topMatch.title}**\n\n")
+                append(topMatch.content)
                 append("\n\n**الأدلة الشرعية:**\n")
-                if (top.quranEvidence.isNotBlank()) append("• **من القرآن الكريم:** ${top.quranEvidence}\n")
-                if (top.hadithEvidence.isNotBlank()) append("• **من السنة النبوية:** ${top.hadithEvidence}\n")
+                if (topMatch.quranEvidence.isNotBlank()) append("• **من القرآن الكريم:** ${topMatch.quranEvidence}\n")
+                if (topMatch.hadithEvidence.isNotBlank()) append("• **من السنة النبوية:** ${topMatch.hadithEvidence}\n")
                 if (liveQuran.isNotEmpty()) {
                     append("\n**آيات ذات صلة مباشرة من المصحف:**\n")
                     liveQuran.forEach { append("• ${it.text} [${it.source}]\n") }
                 }
-                if (top.scholarlyNote.isNotBlank()) {
-                    append("\n**فائدة فقهية:** ${top.scholarlyNote}")
+                if (topMatch.scholarlyNote.isNotBlank()) {
+                    append("\n**فائدة فقهية:** ${topMatch.scholarlyNote}")
                 }
             } else if (liveQuran.isNotEmpty() || liveHadith.isNotEmpty()) {
                 append("استنادًا إلى النصوص الشرعية الموثّقة المحفوظة داخل التطبيق حول موضوع استفسارك («$query»):\n")
@@ -508,29 +549,50 @@ object IslamicAiModel {
                     append("\n**من السنة والأذكار المأثورة:**\n")
                     liveHadith.forEach { append("• «${it.text}» — ${it.source}\n") }
                 }
-                append("\n*تنبيه: في المسائل الشخصية والفتاوى التفصيلية الدقيقة يُنصح باستشارة أهل العلم الموثوقين أو الاتصال بالإنترنت لتفعيل التحليل السحابي الكامل.*")
+                if (isOffline) {
+                    append("\n*تنبيه: في المسائل الشخصية والفتاوى التفصيلية الدقيقة، **يرجى تشغيل الإنترنت** وإعادة إرسال سؤالك لتفعيل التحليل الذكي السحابي الكامل أو استشارة أهل العلم الموثوقين.*")
+                } else {
+                    append("\n*تنبيه: في المسائل الشخصية والفتاوى التفصيلية الدقيقة يُنصح باستشارة أهل العلم الموثوقين.*")
+                }
             } else {
-                append("لم أجد مسألة مطابقة تمامًا لسؤالك: **«$query»** في قاعدة الفتاوى المحلية حتى لا أفتي بغير علم، فالأمانة العلمية تقتضي التثبت.\n\n")
-                append("يمكنك إعادة صياغة السؤال بكلمات أوضح (مثل: حكم سجود السهو، بخاخ الربو للصائم، زكاة المال، كفارة اليمين، تفسير حلم...)، أو تفعيل الاتصال بالإنترنت ليحلّل الذكاء التوليدي استفسارك بتفصيل وعمق.")
+                if (isOffline) {
+                    append("التطبيق يعمل الآن في وضع عدم الاتصال بالإنترنت، ولم أجد ردًا مطابقًا تمامًا لسؤالك أو رسالتك: **«$query»** في قاعدة المعرفة المحلية حتى لا أفتي بغير علم.\n\n")
+                    append("**يرجى تشغيل الإنترنت** وإعادة إرسال سؤالك ليتمكن المساعد الذكي من فهم طلبك والرد عليك بشكل واقعي ومفصّل، أو أعد صياغة سؤالك بكلمات أوضح.")
+                } else {
+                    append("لم أجد مسألة مطابقة تمامًا لسؤالك: **«$query»** في قاعدة الفتاوى المحلية، وتعذّر الوصول المؤقت للخادم السحابي.\n\n")
+                    append("يرجى التأكد من اتصال الإنترنت والمحاولة مرة أخرى، أو إعادة صياغة السؤال بكلمات أوضح.")
+                }
             }
         }.trim()
 
         val refs = buildList {
             liveQuran.forEach { add("${it.label}: ${it.source}") }
             liveHadith.forEach { add(it.source) }
-            if (top != null && topScore >= 5.5 && top.quranEvidence.isNotBlank()) {
-                add(top.title)
+            if (topMatch != null && topMatch.quranEvidence.isNotBlank()) {
+                add(topMatch.title)
             }
         }.distinct()
 
         return IslamicAiResponse(
             text = text,
-            domainTag = top?.takeIf { topScore >= 5.5 }?.let { domainArabicLabel(it.domain) } ?: intent.arabicLabel,
-            detectedTopic = top?.takeIf { topScore >= 5.5 }?.title ?: extractRequestedTopic(query),
+            domainTag = topMatch?.let { domainArabicLabel(it.domain) } ?: intent.arabicLabel,
+            detectedTopic = topMatch?.title ?: extractRequestedTopic(query),
             references = refs,
-            followUps = top?.takeIf { topScore >= 5.5 }?.followUps?.takeIf { it.isNotEmpty() }
+            followUps = topMatch?.followUps?.takeIf { it.isNotEmpty() }
                 ?: defaultFollowUps(intent)
         )
+    }
+
+    private fun isStrongKnowledgeMatch(query: String, entry: CorpusEntry, score: Double): Boolean {
+        if (score < 5.5) return false
+        val queryContent = ArabicNlpEngine.extractContentStems(ArabicNlpEngine.indexText(query))
+        if (queryContent.size <= 2) return true
+        val tkHits = queryContent.count { it in entry.keywordsIndexed.stems || it in entry.titleIndexed.stems }
+        if (tkHits == 0) return false
+        val allHits = queryContent.count {
+            it in entry.keywordsIndexed.stems || it in entry.titleIndexed.stems || it in entry.bodyIndexed.stems
+        }
+        return !(queryContent.size >= 4 && tkHits < 2 && allHits * 2 < queryContent.size)
     }
 
     private fun buildAdaptedTemplate(
@@ -650,8 +712,8 @@ object IslamicAiModel {
     private fun extractRequestedTopic(query: String): String {
         val cleaned = query
             .trim()
-            .replace(Regex("^(اكتب لي|أكتب لي|اكتبلي|اكتب|أكتب|أعد لي|أعد|اعد لي|اعد|اعطني|أعطني|صغ لي|صغ|ممكن|أريد|اريد|حضر لي|حضر)\\s*"), "")
-            .replace(Regex("^(خطبة جمعة كاملة|خطبة جمعة|خطبة منبرية|خطبة|محاضرة دعوية|محاضرة|درس ديني|درس|رسالة دينية إسلامية|رسالة دينية|رسالة|خاطرة إيمانية|خاطرة دينيه|خاطرة)\\s*(عن|حول|في|بشأن|موضوع|بمناسبة)?\\s*"), "")
+            .replace(Regex("^(ممكن\\s+|لو سمحت\\s+|بالله\\s+)?(اكتب لي|أكتب لي|اكتبلي|اكتب|أكتب|أعد لي|أعد|اعد لي|اعد|اعطني|أعطني|عطني|صغ لي|صغ|سوي لي|سويلي|حضر لي|حضر|أريد|اريد|أبغى|ابغى|ابغا|بغيت|ودي)\\s*"), "")
+            .replace(Regex("^(خطبة جمعة كاملة|خطبة جمعة|خطبة منبرية|خطبة|محاضرة دعوية|محاضرة|درس ديني|درس|رسالة دينية إسلامية|رسالة دينية|رسالة|خاطرة إيمانية|خاطرة دينيه|خواطر إيمانية|خواطر|خاطرة)\\s*(عن|حول|في|بشأن|موضوع|بمناسبة)?\\s*"), "")
             .trim()
         return if (cleaned.length >= 3) cleaned else query.trim()
     }

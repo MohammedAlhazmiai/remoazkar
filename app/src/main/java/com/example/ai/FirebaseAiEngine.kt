@@ -29,25 +29,32 @@ import java.io.InputStream
  */
 object FirebaseAiEngine {
     private const val TAG = "FirebaseAiEngine"
-    private const val PRIMARY_MODEL = "gemini-3.8-flash"
-    private const val FALLBACK_MODEL = "gemini-3.5-flash-lite"
+    const val PRIMARY_MODEL = "gemini-3.5-flash-lite"
+    const val FALLBACK_MODEL = "gemini-3.8-flash"
     private const val MAX_IMAGE_DIMENSION = 1536
     private const val MAX_AUDIO_BYTES = 15 * 1024 * 1024 // 15 MB
 
+    data class CloudReplyResult(
+        val text: String?,
+        val isOffline: Boolean,
+        val attemptedCloud: Boolean
+    )
+
     private val SYSTEM_INSTRUCTION = """
-        أنت المساعد الإسلامي الذكي التابع لتطبيق «زاد المسلم». أنت نموذج لغوي متطور وعالم شرعي لطيف ورفيق حوار صادق يجمع بين العلم الشرعي المؤصل والألفة الإنسانية الدافئة (مثل صديقين يتحاوران بمودة واحترام).
+        أنت المساعد الإسلامي الذكي التابع لتطبيق «زاد المسلم». أنت نموذج لغوي متطور وعالم شرعي لطيف وأديب بليغ ورفيق حوار صادق يجمع بين العلم الشرعي المؤصل والفهم الدقيق لمختلف اللهجات والأساليب البشرية.
 
         قواعدك الصارمة التي لا تحيد عنها:
-        1. **المطابقة التامة لسؤال المستخدم:** افهم قصد المستخدم بدقة من كلامه (سواء بالعربية الفصحى أو بأي لهجة عامية: خليجية، مصرية، شامية، مغاربية، يمنية، عراقية...) وأجب عن سؤاله هو تحديدًا ولا تنحرف أبدًا إلى موضوع آخر!
-           - إن سألك عن تفسير حلم معين (مثل حلم الذبح أو السقوط أو غيره) ففسّر الرمز الذي ذكره هو وفق قواعد ابن سيرين والنابلسي مع التنبيه الشرعي، ولا تستبدله برمز لم يذكره.
-           - إن سألك سؤالًا فقهيًا فأجب بالأدلة من القرآن والسنة مع ذكر الخلاف الفقهي المعتبر عند الحاجة.
-           - إن سألك عن خدماتك فوضّح قدراتك بوضوح.
-        2. **الدردشة اليومية الصادقة كصديقين:** إن تحدث معك المستخدم في شأن حياته اليومي (تعب عمل، ملل، همّ، فرح، فضفضة، سلام، دردشة أخوية عادية)، فتفاعل معه بدفء ولطف وروح أخوية قريبة من القلب دون تكلف آلي، مع تطعيم الحديث بلمسة إيمانية مطمئنة ولطيفة تناسب حاله.
+        1. **الفهم الدقيق والمطابقة التامة لسؤال المستخدم:** افهم قصد المستخدم بدقة من كلامه (سواء بالعربية الفصحى أو بأي لهجة عامية: خليجية، يمنية، مصرية، شامية، مغاربية، عراقية...) وأجب عن طلبه هو تحديدًا ولا تنحرف أبدًا إلى موضوع آخر!
+           - **الفتاوى والمسائل الفقهية:** أجب بواقعية وعلم ومنهجية، واذكر القول الراجح مع الدليل من القرآن الكريم والسنة الصحيحة، وبيّن الخلاف الفقهي المعتبر وأقوال المذاهب عند الحاجة بأسلوب ميسر وعملي.
+           - **تفسير الأحلام وتعبير الرؤى:** فسّر كل رمز ذكره الرائي بدقة وفق قواعد ابن سيرين والنابلسي مع مراعاة القرائن والسياق، والتفريق بين الرؤيا الصالحة وحديث النفس والكابوس، والتنبيه الشرعي أن التعبير ظنّ واجتهاد.
+           - **الرسائل الدينية والخواطر والخطب والمحاضرات:** اكتب نصوصًا واقعية بليغة مؤثرة ومكتملة البناء (خطبة أولى وثانية، محاور محاضرة متكاملة، رسائل تهنئة/تعزية/نصح/مودة، خواطر وجدانية راقية) مشفوعة بآيات وأحاديث صحيحة.
+           - **إن سألك عن خدماتك** فوضّح قدراتك بوضوح.
+        2. **الدردشة اليومية الصادقة كصديقين:** إن تحدث معك المستخدم في شأن حياته اليومي (تعب عمل، ملل، همّ، فرح، فضفضة، سلام، دردشة أخوية عادية)، فتفاعل معه بدفء ولطف وروح أخوية قريبة من القلب دون تكلف آلي، مع تطعيم الحديث بلمسة إيمانية مطمئنة تناسب حاله.
         3. **الفهم الفعلي للصور والصوتيات المرفقة:**
            - عند إرفاق صورة: اقرأ محتواها البصري بدقة (نصوص، آيات، لوحات، مصاحف، وثائق، مشاهد) وأجب بناءً على ما تراه فعليًا فيها.
            - عند إرفاق ملف صوتي: استمع لمحتواه الفعلي بدقة (سؤال بالعامية أو الفصحى، تلاوة قرآن، ذكر، خاطرة صوتية) وأجب مباشرة على ما سمعته في التسجيل.
         4. **الاختصاص الشرعي والأدب الإسلامي:** يقتصر عملك على العلوم الشرعية والإسلامية، وتفسير الرؤى، والآداب والخواطر والخطب والدروس، والدردشة الأخوية الطيبة والحياتية المنضبطة بأخلاق الإسلام. اعتذر بلطف وأدب إن طُلب منك كتابة أكواد برمجية، أو اختراق، أو حل مسائل فيزياء/كيمياء، أو أخبار أفلام/مباريات/موسيقى محرمة (ما لم يكن السؤال عن الحكم الشرعي فيها).
-        5. **الأسلوب والتوثيق:** اكتب بلغة عربية واضحة جذابة ومنظمة بعناوين ونقاط مريحة للعين عند الحاجة، وبأسلوب حواري طبيعي دافئ عند الدردشة، ولا تختلق آية أو حديثًا غير صحيح أبدًا.
+        5. **الأسلوب والتوثيق:** اكتب بلغة عربية واضحة جذابة ومنظمة بعناوين ونقاط مريحة للعين، ولا تختلق آية أو حديثًا غير صحيح أبدًا.
     """.trimIndent()
 
     private fun buildModel(modelName: String): GenerativeModel {
@@ -55,7 +62,7 @@ object FirebaseAiEngine {
         val config = generationConfig {
             temperature = 0.65f
             topP = 0.9f
-            maxOutputTokens = 2048
+            maxOutputTokens = 4096
         }
         return Firebase.ai.generativeModel(
             modelName = modelName,
@@ -82,22 +89,40 @@ object FirebaseAiEngine {
         attachmentType: String,
         attachmentUri: String,
         recentMessages: List<AiMessageEntity>
-    ): String? {
-        if (context == null || !isNetworkAvailable(context)) return null
+    ): String? = generateGenerativeResult(
+        context = context,
+        query = query,
+        attachmentType = attachmentType,
+        attachmentUri = attachmentUri,
+        recentMessages = recentMessages
+    ).text
+
+    suspend fun generateGenerativeResult(
+        context: Context?,
+        query: String,
+        attachmentType: String,
+        attachmentUri: String,
+        recentMessages: List<AiMessageEntity>
+    ): CloudReplyResult {
+        if (context == null || !isNetworkAvailable(context)) {
+            return CloudReplyResult(text = null, isOffline = true, attemptedCloud = false)
+        }
 
         return try {
             AppCheckInitializer.ensureConfigured(context.applicationContext)
 
-            val userContent = buildUserContent(context, query, attachmentType, attachmentUri) ?: return null
+            val userContent = buildUserContent(context, query, attachmentType, attachmentUri)
+                ?: return CloudReplyResult(text = null, isOffline = false, attemptedCloud = false)
             val history = buildChatHistory(recentMessages)
 
-            tryModel(PRIMARY_MODEL, primaryModel, history, userContent)
+            val text = tryModel(PRIMARY_MODEL, primaryModel, history, userContent)
                 ?: tryModel(FALLBACK_MODEL, fallbackModel, history, userContent)
+            CloudReplyResult(text = text, isOffline = false, attemptedCloud = true)
         } catch (ce: CancellationException) {
             throw ce
         } catch (t: Throwable) {
             Log.w(TAG, "Cloud AI unavailable, falling back to local model: ${t.message}", t)
-            null
+            CloudReplyResult(text = null, isOffline = false, attemptedCloud = true)
         }
     }
 
@@ -108,7 +133,7 @@ object FirebaseAiEngine {
         userContent: Content
     ): String? {
         return try {
-            withTimeout(45_000L) {
+            withTimeout(60_000L) {
                 val response = if (history.isNotEmpty()) {
                     model.startChat(history).sendMessage(userContent)
                 } else {

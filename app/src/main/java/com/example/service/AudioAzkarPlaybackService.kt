@@ -300,7 +300,7 @@ class AudioAzkarPlaybackService : Service() {
         requestTransientAudioFocus()
         val player = MediaPlayer()
         mediaPlayer = player
-        scheduleClipWatchdog()
+        scheduleClipWatchdog(45_000L)
         try {
             player.setWakeMode(applicationContext, PowerManager.PARTIAL_WAKE_LOCK)
             player.setAudioAttributes(
@@ -336,6 +336,13 @@ class AudioAzkarPlaybackService : Service() {
                 )
             }
             player.prepare()
+            val clipDurationMs = runCatching { player.duration.toLong() }.getOrDefault(0L)
+            val watchdogDelayMs = if (clipDurationMs > 0L) {
+                (clipDurationMs + 10_000L).coerceIn(30_000L, 180_000L)
+            } else {
+                45_000L
+            }
+            scheduleClipWatchdog(watchdogDelayMs)
             if (mediaPlayer === player) {
                 player.start()
             }
@@ -353,16 +360,16 @@ class AudioAzkarPlaybackService : Service() {
         }
     }
 
-    private fun scheduleClipWatchdog() {
+    private fun scheduleClipWatchdog(timeoutMs: Long = 45_000L) {
         cancelClipWatchdog()
         val runnable = Runnable {
             if (playingHuman || playingAdhan) {
-                Log.w(TAG, "Playback watchdog fired; releasing completed/stalled clip cleanly")
+                Log.w(TAG, "Playback watchdog fired after ${timeoutMs}ms; releasing completed/stalled clip cleanly")
                 finishRawClip()
             }
         }
         clipWatchdogRunnable = runnable
-        mainHandler.postDelayed(runnable, 25_000L)
+        mainHandler.postDelayed(runnable, timeoutMs)
     }
 
     private fun cancelClipWatchdog() {

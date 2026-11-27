@@ -63,6 +63,7 @@ import com.example.ui.components.AppUpdateDialog
 import com.example.ui.components.AppSettingsDrawer
 import com.example.ui.components.SmartReaderBus
 import com.example.ui.components.SmartReaderFab
+import com.example.ui.components.TasbeehOverlayGuideDialog
 import com.example.ui.components.TtsMiniBar
 import com.example.ui.components.UpdateDialogState
 import com.example.ui.screens.AboutScreen
@@ -390,6 +391,7 @@ private fun AppRoot(
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
     var updateDialog by remember { mutableStateOf<UpdateDialogState?>(null) }
     var automaticUpdateCheckStarted by rememberSaveable { mutableStateOf(false) }
+    var showFloatingTasbeehGuide by rememberSaveable { mutableStateOf(false) }
 
     val requestUpdateCheck: () -> Unit = {
         updateDialog = UpdateDialogState.Checking
@@ -503,15 +505,13 @@ private fun AppRoot(
                             if (FloatingTasbeehService.canDrawOverlays(context)) {
                                 FloatingTasbeehService.setEnabled(context, true)
                                 runCatching { ContextCompat.startForegroundService(context, intent) }
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "تم تفعيل المسبحة العائمة فوق الشاشة بنجاح",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
                             } else {
-                                runCatching {
-                                    context.startActivity(
-                                        android.content.Intent(
-                                            android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                            android.net.Uri.parse("package:${context.packageName}")
-                                        )
-                                    )
-                                }
+                                showFloatingTasbeehGuide = true
                             }
                         }
                     )
@@ -797,6 +797,12 @@ private fun AppRoot(
                     }
                 }
             }
+        )
+    }
+
+    if (showFloatingTasbeehGuide) {
+        TasbeehOverlayGuideDialog(
+            onDismiss = { showFloatingTasbeehGuide = false }
         )
     }
 }

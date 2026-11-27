@@ -19,6 +19,10 @@ class IslamicGuardrailTest {
         assertTrue(IslamicGuardrail.isAllowedQuery("اليوم تعبان في العمل وودي نسولف شوي"))
         assertTrue(IslamicGuardrail.isAllowedQuery("ماذا يمكنك ان تقدمه لي من مساعدة"))
         assertTrue(IslamicGuardrail.isAllowedQuery("زهقان وطفشان كيف حالك يا صديقي"))
+        assertTrue(IslamicGuardrail.isAllowedQuery("رأيت ثعبان يطاردني"))
+        assertTrue(IslamicGuardrail.isAllowedQuery("سقوط أسناني في الحلم"))
+        assertTrue(IslamicGuardrail.isAllowedQuery("وش حكم المسح على الجوربين"))
+        assertTrue(IslamicGuardrail.isAllowedQuery("علامات الساعة الصغرى والكبرى"))
     }
 
     @Test

@@ -179,7 +179,39 @@ class IslamicAiModelTest {
         val unknownDream = IslamicAiModel.generateReply("تفسير حلم كوكب المريخ والنيزك", corpus)
         assertEquals(IslamicIntent.DREAMS.arabicLabel, unknownDream.domainTag)
         assertFalse("Unmatched dream must NEVER return flying dream", unknownDream.text.contains("الطيران"))
-        assertTrue(unknownDream.text.contains("المريخ") || unknownDream.text.contains("النيزك") || unknownDream.text.contains("الضوابط"))
+        assertTrue(unknownDream.text.contains("المريخ") || unknownDream.text.contains("النيزك"))
+        assertTrue("Expected offline internet prompt in unmatched dream reply", unknownDream.text.contains("تشغيل الإنترنت"))
+    }
+
+    @Test
+    fun upgradedAssistantModelConfigExpandedCorpusAndOfflineInternetPromptWork() {
+        assertEquals("gemini-3.5-flash-lite", FirebaseAiEngine.PRIMARY_MODEL)
+
+        val socks = IslamicAiModel.generateReply("وش حكم المسح على الجوربين", corpus)
+        assertEquals(IslamicIntent.FATWA.arabicLabel, socks.domainTag)
+        assertTrue(socks.text.contains("المسح") && (socks.text.contains("يوم") || socks.text.contains("ليلة")))
+
+        val snakeDream = IslamicAiModel.generateReply("حلمت بثعبان يطاردني", corpus)
+        assertEquals(IslamicIntent.DREAMS.arabicLabel, snakeDream.domainTag)
+        assertTrue(snakeDream.text.contains("ثعبان") || snakeDream.text.contains("الحية"))
+
+        val condolence = IslamicAiModel.generateReply("اكتب لي رسالة تعزية", corpus)
+        assertEquals(IslamicIntent.LETTER.arabicLabel, condolence.domainTag)
+        assertTrue(condolence.text.contains("تعز") || condolence.text.contains("لله ما أخذ"))
+
+        val prayerKhutbah = IslamicAiModel.generateReply("خطبة جمعة عن الصلاة", corpus)
+        assertEquals(IslamicIntent.KHUTBAH.arabicLabel, prayerKhutbah.domainTag)
+        assertTrue(prayerKhutbah.text.contains("الخطبة الأولى") && prayerKhutbah.text.contains("الصلاة"))
+
+        val hourSigns = IslamicAiModel.generateReply("ما هي علامات الساعة الصغرى والكبرى", corpus)
+        assertTrue(hourSigns.text.contains("الساعة") && (hourSigns.text.contains("الدجال") || hourSigns.text.contains("الصغرى")))
+
+        val unmatchedFatwa = IslamicAiModel.generateReply("ما حكم استثمار المركبات الفضائية في شهر شوال", corpus)
+        assertEquals(IslamicIntent.FATWA.arabicLabel, unmatchedFatwa.domainTag)
+        assertTrue(
+            "Expected explicit offline internet prompt, got: ${unmatchedFatwa.text}",
+            unmatchedFatwa.text.contains("تشغيل الإنترنت")
+        )
     }
 
     @Test

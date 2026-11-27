@@ -320,9 +320,9 @@ fun PrayerTimesScreen(onBackClick: () -> Unit) {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("صوت بداية الأذان عند التذكير", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                Text("صوت تنبيه الأذان عند التذكير", fontSize = 14.sp, fontWeight = FontWeight.Medium)
                                 Text(
-                                    "ينطق «الله أكبر، الله أكبر» مرة واحدة عند حلول التذكير فقط",
+                                    "يُشغِّل صوت الأذان المعتمد للصلوات الخمس عند حلول وقت التذكير",
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -474,11 +474,11 @@ fun PrayerTimesScreen(onBackClick: () -> Unit) {
                                         context = context,
                                         id = 5199,
                                         title = "تنبيه تجريبي لمواعيد الصلاة",
-                                        body = "بداية الأذان: الله أكبر، الله أكبر — تنبيهات الصلوات الخمس مفعّلة وتعمل بنجاح.",
+                                        body = "صوت الأذان للصلوات الخمس — تنبيهات الصلاة مفعّلة وتعمل بنجاح.",
                                         playAdhanStart = adhanSoundEnabled
                                     )
                                     statusMessage = if (adhanSoundEnabled) {
-                                        "تم تشغيل التنبيه التجريبي مع صوت بداية الأذان"
+                                        "تم تشغيل التنبيه التجريبي مع صوت الأذان المعتمد"
                                     } else {
                                         "تم إرسال إشعار تجريبي صامت لمواعيد الصلاة"
                                     }

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -30,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.PreferencesManager
 import com.example.data.TasbeehState
 import com.example.data.TtsManager
+import com.example.ui.components.TasbeehOverlayGuideDialog
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,9 +47,18 @@ fun TasbeehScreen(
     var targetCount by remember { mutableIntStateOf(33) }
     var vibrationEnabled by remember { mutableStateOf(true) }
 
-    // حفظ المجموع الكلي واستعادته بعد إغلاق التطبيق
     val prefs = remember { PreferencesManager(context) }
     val scope = rememberCoroutineScope()
+    val guideShown by prefs.tasbeehGuideShownFlow.collectAsState(initial = null as Boolean?)
+    var showOverlayGuide by remember { mutableStateOf(false) }
+    var guideAutoTriggered by remember { mutableStateOf(false) }
+    LaunchedEffect(guideShown) {
+        if (!guideAutoTriggered && guideShown == false) {
+            guideAutoTriggered = true
+            showOverlayGuide = true
+        }
+    }
+
     val savedTotal by prefs.tasbeehTotalFlow.collectAsState(initial = -1)
     val savedState by prefs.tasbeehStateFlow.collectAsState(initial = null as TasbeehState?)
     var restored by remember { mutableStateOf(false) }
@@ -124,6 +135,16 @@ fun TasbeehScreen(
                 },
                 actions = {
                     IconButton(
+                        onClick = { showOverlayGuide = true },
+                        modifier = Modifier.testTag("tasbeeh_guide_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Layers,
+                            contentDescription = "تعليمات المسبحة العائمة في الخلفية",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    IconButton(
                         onClick = { vibrationEnabled = !vibrationEnabled; persistState() },
                         enabled = counterReady,
                         modifier = Modifier.testTag("vibration_toggle")
@@ -155,9 +176,10 @@ fun TasbeehScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingVals)
-                .padding(20.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -317,7 +339,28 @@ fun TasbeehScreen(
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(12.dp))
+                FilledTonalButton(
+                    onClick = { showOverlayGuide = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .testTag("tasbeeh_floating_guide_button")
+                ) {
+                    Icon(Icons.Default.Layers, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("تعليمات تفعيل المسبحة العائمة فوق الشاشة بالخلفية", fontSize = 12.sp)
+                }
             }
         }
+    }
+
+    if (showOverlayGuide) {
+        TasbeehOverlayGuideDialog(
+            onDismiss = {
+                showOverlayGuide = false
+                scope.launch { prefs.setTasbeehGuideShown(true) }
+            }
+        )
     }
 }

@@ -42,9 +42,12 @@ import com.example.data.HijriCalendar
 import com.example.data.HisnChapter
 import com.example.data.HisnRepository
 import com.example.data.PrayerStore
+import com.example.data.PreferencesManager
 import com.example.data.RuqyahData
 import com.example.data.TtsManager
+import com.example.ui.components.HomeOnboardingTourDialog
 import com.example.ui.components.SmartReaderBus
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -104,6 +107,25 @@ fun HomeScreen(
         HisnRepository.chapters.firstOrNull {
             HisnRepository.normalize(it.title) == HisnRepository.normalize("أذكار المساء")
         }
+    }
+    val prefs = remember { PreferencesManager(context) }
+    val scope = rememberCoroutineScope()
+    val homeTourCompleted by prefs.homeTourCompletedFlow.collectAsState(initial = null as Boolean?)
+
+    if (homeTourCompleted == false) {
+        HomeOnboardingTourDialog(
+            onDismiss = {
+                scope.launch { prefs.setHomeTourCompleted(true) }
+            },
+            onOpenAudioAzkar = {
+                scope.launch { prefs.setHomeTourCompleted(true) }
+                onAudioAzkarClick()
+            },
+            onOpenSettings = {
+                scope.launch { prefs.setHomeTourCompleted(true) }
+                onAdvancedSettingsClick()
+            }
+        )
     }
 
     Scaffold(
@@ -731,13 +753,13 @@ private fun IslamicAiHomeCard(onClick: () -> Unit) {
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "المساعد الإسلامي الذكي (محلي)",
+                    "المساعد الإسلامي الذكي",
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp
                 )
                 Text(
-                    "يعمل بدون إنترنت • فتاوى، خطب، رسائل، خواطر، وتفسير أحلام",
+                    "ذكاء سحابي ومحلي • فتاوى، خطب، رسائل، خواطر، وتفسير أحلام",
                     color = Color(0xFFD8EBE0),
                     fontSize = 11.sp,
                     maxLines = 2
