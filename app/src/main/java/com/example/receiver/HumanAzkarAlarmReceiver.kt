@@ -79,13 +79,7 @@ class HumanAzkarAlarmReceiver : BroadcastReceiver() {
             var player: MediaPlayer? = null
             try {
                 runCatching {
-                    NotificationHelper.show(
-                        context = appContext,
-                        id = FALLBACK_NOTIF_ID,
-                        title = trackTitle,
-                        body = "ذكر صوتي دوري · كل ${HumanAzkarScheduler.intervalMinutes(appContext)} دقيقة",
-                        channel = NotificationHelper.CHANNEL_HUMAN_AZKAR_SILENT
-                    )
+                    NotificationHelper.showHumanAzkarTextBanner(appContext)
                 }
                 val mp = MediaPlayer().apply {
                     setWakeMode(appContext, PowerManager.PARTIAL_WAKE_LOCK)

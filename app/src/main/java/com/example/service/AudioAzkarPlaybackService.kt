@@ -248,10 +248,10 @@ class AudioAzkarPlaybackService : Service() {
         humanIndex = HumanAzkarAudioCatalog.tracks
             .indexOfFirst { it.resourceName == resourceName }
             .takeIf { it >= 0 } ?: 0
-        startHumanTrack()
+        startHumanTrack(showSeparateTextBanner = true)
     }
 
-    private fun startHumanTrack() {
+    private fun startHumanTrack(showSeparateTextBanner: Boolean = false) {
         val track = HumanAzkarAudioCatalog.trackAt(humanIndex)
         pendingTitle = track.title
         activeResourceName = track.resourceName
@@ -283,6 +283,12 @@ class AudioAzkarPlaybackService : Service() {
                 null
             )
             return
+        }
+
+        if (showSeparateTextBanner) {
+            runCatching {
+                NotificationHelper.showHumanAzkarTextBanner(applicationContext)
+            }
         }
 
         startRawResourcePlayer(
@@ -650,7 +656,7 @@ class AudioAzkarPlaybackService : Service() {
             humanIndex = prefs.getInt(KEY_INDEX, 0)
                 .coerceIn(0, HumanAzkarAudioCatalog.tracks.lastIndex)
             acquireWakeLock()
-            startHumanTrack()
+            startHumanTrack(showSeparateTextBanner = false)
         }
     }
 

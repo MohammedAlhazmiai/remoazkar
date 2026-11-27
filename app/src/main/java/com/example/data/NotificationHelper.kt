@@ -35,8 +35,10 @@ object NotificationHelper {
     const val CHANNEL_DAILY_SILENT = "rim_daily_silent"
     const val CHANNEL_HUMAN_AZKAR = "rim_human_azkar_v1"
     const val CHANNEL_HUMAN_AZKAR_SILENT = "rim_human_azkar_silent"
+    const val CHANNEL_HUMAN_TEXT_AZKAR = "zad_human_text_azkar_v1"
     const val CHANNEL_PRAYERS = "zad_prayers_adhan_v2"
     const val CHANNEL_PRAYERS_SILENT = "zad_prayers_silent"
+    const val NOTIFICATION_ID_HUMAN_TEXT_AZKAR = 7045
 
     private const val TAG = "NotificationHelper"
 
@@ -117,6 +119,16 @@ object NotificationHelper {
             setSound(null, null)
             enableVibration(false)
         }
+        val humanTextAzkar = NotificationChannel(
+            CHANNEL_HUMAN_TEXT_AZKAR,
+            "الأذكار النصية المصاحبة للأذكار الصوتية",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "إشعار نصي منفصل يظهر في الأعلى وقت نطق الأذكار الصوتية البشرية دون التداخل مع الصوت"
+            setSound(null, null)
+            enableVibration(false)
+            enableLights(true)
+        }
 
         // قناة إشعارات الصلاة: عالية الأهمية مع اهتزاز وصامتة على القناة نفسها لأن صوت بداية الأذان
         // يُشغَّل مباشرةً عبر مشغل الصوت (AudioAzkarPlaybackService) لتجنّب التداخل أو تكرار الصوت.
@@ -148,6 +160,7 @@ object NotificationHelper {
         nm.createNotificationChannel(dailySilent)
         nm.createNotificationChannel(humanAzkar)
         nm.createNotificationChannel(humanAzkarSilent)
+        nm.createNotificationChannel(humanTextAzkar)
         nm.createNotificationChannel(prayers)
         nm.createNotificationChannel(prayersSilent)
     }
@@ -366,6 +379,52 @@ object NotificationHelper {
         } catch (_: SecurityException) {
             // Notification permission can be revoked while an interval is already scheduled.
         }
+    }
+
+    /**
+     * يُظهر إشعارًا نصيًا منفصلًا في الأعلى وقت نطق الأذكار الصوتية البشرية،
+     * يعرض ذكرًا قصيرًا من قائمة الأذكار النصية (سبحان الله، الحمد لله، ...) دون صوت إضافي
+     * حتى لا يتداخل مع صوت القارئ البشري.
+     */
+    fun showHumanAzkarTextBanner(context: Context): ShortTextZikr {
+        val appContext = context.applicationContext
+        createChannels(appContext)
+        val item = ShortTextAzkarCatalog.nextItem(appContext)
+
+        val openIntent = Intent(appContext, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+        val openPending = PendingIntent.getActivity(appContext, NOTIFICATION_ID_HUMAN_TEXT_AZKAR, openIntent, flags)
+
+        val builder = NotificationCompat.Builder(appContext, CHANNEL_HUMAN_TEXT_AZKAR)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle(item.title)
+            .setContentText(item.text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(item.text))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setOnlyAlertOnce(false)
+            .setAutoCancel(true)
+            .setSound(null)
+            .setVibrate(null)
+            .setContentIntent(openPending)
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            builder.setSilent(true)
+        }
+
+        try {
+            NotificationManagerCompat.from(appContext).notify(NOTIFICATION_ID_HUMAN_TEXT_AZKAR, builder.build())
+        } catch (_: SecurityException) {
+            // إذن الإشعارات غير ممنوح
+        }
+        return item
     }
 
     private fun humanAzkarTrackChannel(

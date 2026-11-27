@@ -265,7 +265,7 @@ private fun HumanRecordingsContent() {
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
             ) {
                 Text(
-                    "تضمّن التطبيق ${HumanAzkarAudioCatalog.tracks.size} تسجيلًا بشريًا قصيرًا من الملف المرفق. يمكنك معاينة كل مقطع أدناه، أو تفعيل تشغيلها بالتناوب على الفاصل الزمني الذي تختاره (دقائق أو ساعات، جاهزة أو يدوية). يتوقف التشغيل بعد كل مقطع ثم يُشغَّل المقطع التالي بعد الفاصل المحدد.",
+                    "تضمّن التطبيق ${HumanAzkarAudioCatalog.tracks.size} تسجيلًا بشريًا قصيرًا. عند نطق كل ذكر صوتي يظهر لك إشعار نصي منفصل في الأعلى بأذكار التسبيح والتهليل والاستغفار، بينما تبقى أذكار الصباح والمساء مخصصة لأوقات قراءتها فقط.",
                     modifier = Modifier.padding(14.dp),
                     fontSize = 13.sp,
                     lineHeight = 20.sp,

@@ -13,7 +13,15 @@ class ReminderReceiver : BroadcastReceiver() {
         val title = intent.getStringExtra("title") ?: "تذكير"
         val body = intent.getStringExtra("body") ?: "حان وقت الذكر"
 
-        NotificationHelper.show(context, id, title, body)
+        val channel = if (
+            id == 1 || id == 2 || id == 3 ||
+            id == ReminderScheduler.REQ_KAHF || id == ReminderScheduler.REQ_MULK
+        ) {
+            NotificationHelper.CHANNEL_DAILY
+        } else {
+            NotificationHelper.CHANNEL_REMINDERS
+        }
+        NotificationHelper.show(context, id, title, body, channel = channel)
 
         // إعادة الجدولة: تذكيرات المستخدم تُعاد لليوم التالي، ومنبّهات الكهف والملك تُعاد أسبوعيًا/يوميًا
         if (id == ReminderScheduler.REQ_KAHF || id == ReminderScheduler.REQ_MULK) {
